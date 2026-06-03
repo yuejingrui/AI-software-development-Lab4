@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cloudbase-cli": {
+      "command": "tcb",
+      "args": ["mcp-server", "--envId", "lab3-3-d5gdcm7qo10ced8af"]
+    }
+  }
+}

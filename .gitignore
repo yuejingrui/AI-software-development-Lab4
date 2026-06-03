@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# CloudBase
+cloudfunctions/**/node_modules/
+
+# Zip archives (deploy artifacts)
+*.zip
+
+# MCP / mcporter runtime artifacts
+config/
+
+# Debug / helper artifacts
+.trae/*-help.txt
+.trae/*-describe.txt
+.trae/*-schema.json
+
+# Lab documents (not code)
+lab4.pdf
+
+# TypeScript build cache
+*.tsbuildinfo
