@@ -9,6 +9,7 @@
         class="plan-item"
         @click="$emit('selectPlan', plan._id)"
       >
+        <button class="btn-delete-plan" @click.stop="$emit('deletePlan', plan._id, plan.topic)" title="删除计划">×</button>
         <div class="plan-left">
           <div class="plan-topic">{{ plan.topic }}</div>
           <div class="plan-date">{{ plan.startDate }} ~ {{ plan.endDate }}</div>
@@ -37,7 +38,7 @@ import type { PlanSummary } from '@/types'
 import TagChip from './TagChip.vue'
 
 defineProps<{ plans: PlanSummary[] }>()
-defineEmits<{ selectPlan: [planId: string] }>()
+defineEmits<{ selectPlan: [planId: string]; deletePlan: [planId: string, topic: string] }>()
 
 function progressPercent(plan: PlanSummary): number {
   if (plan.totalTasks === 0) return 0
@@ -46,24 +47,34 @@ function progressPercent(plan: PlanSummary): number {
 </script>
 
 <style scoped>
-.plan-summary-list { padding: 12px 16px; border-top: 1px solid #e5e7eb; }
-.list-title { margin: 0 0 8px; font-size: 14px; color: #374151; }
-.empty-hint { color: #9CA3AF; font-size: 13px; text-align: center; padding: 12px; }
-.plan-items { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.plan-summary-list { padding: 6px 10px; }
+.list-title { margin: 0 0 4px; font-size: 12px; color: #374151; }
+.empty-hint { color: #9CA3AF; font-size: 11px; text-align: center; padding: 8px; }
+.plan-items {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  overflow-y: auto; max-height: 150px;
+}
 .plan-item {
-  flex: 0 0 auto; min-width: 200px; padding: 10px 12px;
-  border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer;
-  transition: border-color 0.15s; display: flex; justify-content: space-between;
-  align-items: center;
+  padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 6px;
+  cursor: pointer; transition: border-color 0.15s; position: relative;
+  display: flex; justify-content: space-between; align-items: center;
 }
 .plan-item:hover { border-color: #4F46E5; }
+.plan-item:hover .btn-delete-plan { opacity: 1; }
+.btn-delete-plan {
+  position: absolute; top: 2px; right: 2px; opacity: 0;
+  background: none; border: none; color: #EF4444; font-size: 14px;
+  cursor: pointer; line-height: 1; padding: 1px 4px; border-radius: 3px;
+  transition: opacity 0.15s;
+}
+.btn-delete-plan:hover { background: #FEE2E2; }
 .plan-left { flex: 1; min-width: 0; }
-.plan-topic { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.plan-date { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
-.plan-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
-.plan-right { margin-left: 12px; }
-.plan-progress { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.progress-bar { width: 60px; height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
+.plan-topic { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-date { font-size: 9px; color: #9CA3AF; margin-top: 1px; }
+.plan-tags { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; }
+.plan-right { margin-left: 6px; }
+.plan-progress { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.progress-bar { width: 40px; height: 3px; background: #e5e7eb; border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: #4F46E5; border-radius: 2px; transition: width 0.3s; }
-.progress-text { font-size: 12px; color: #4F46E5; font-weight: 500; }
+.progress-text { font-size: 10px; color: #4F46E5; font-weight: 500; }
 </style>

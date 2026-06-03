@@ -42,6 +42,11 @@ export async function updateTaskStatus(taskId: string, completed: boolean): Prom
   return !!result.success
 }
 
+export async function deletePlan(planId: string): Promise<boolean> {
+  const result = await callHttpFunction('deletePlan', { planId })
+  return !!result.success
+}
+
 export async function updateTaskInfo(taskId: string, updates: { title?: string; description?: string; estimatedMinutes?: number; date?: string; priority?: string; tags?: TagView[] }): Promise<boolean> {
   const result = await callHttpFunction('updateTaskInfo', { taskId, ...updates })
   return !!result.success

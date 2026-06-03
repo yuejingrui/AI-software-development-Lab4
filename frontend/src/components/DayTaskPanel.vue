@@ -75,20 +75,20 @@ const sortedTasks = computed(() => {
 </script>
 
 <style scoped>
-.day-panel { padding: 16px; height: 100%; display: flex; flex-direction: column; }
-.panel-header { margin-bottom: 12px; }
-.panel-header h3 { margin: 0 0 4px; font-size: 16px; }
-.task-summary { font-size: 12px; color: #6B7280; }
-.empty-hint { color: #9CA3AF; font-size: 14px; text-align: center; margin-top: 40px; }
-.task-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-.task-item { padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb; }
+.day-panel { padding: 10px 8px; height: 100%; display: flex; flex-direction: column; }
+.panel-header { margin-bottom: 6px; }
+.panel-header h3 { margin: 0 0 2px; font-size: 14px; }
+.task-summary { font-size: 11px; color: #6B7280; }
+.empty-hint { color: #9CA3AF; font-size: 12px; text-align: center; margin-top: 20px; }
+.task-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.task-item { padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; }
 .task-item.completed { opacity: 0.65; background: #f9fafb; }
-.task-header { display: flex; gap: 10px; align-items: flex-start; }
-.task-header input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; cursor: pointer; }
+.task-header { display: flex; gap: 8px; align-items: flex-start; }
+.task-header input[type="checkbox"] { margin-top: 2px; width: 14px; height: 14px; cursor: pointer; }
 .task-body { flex: 1; min-width: 0; }
-.task-title { font-size: 14px; font-weight: 500; word-break: break-word; }
-.task-meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
-.plan-topic { font-size: 11px; color: #4F46E5; background: #EEF2FF; padding: 1px 6px; border-radius: 4px; }
-.task-duration { font-size: 11px; color: #9CA3AF; }
-.task-desc { font-size: 12px; color: #6B7280; margin-top: 4px; }
+.task-title { font-size: 13px; font-weight: 500; word-break: break-word; }
+.task-meta { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 3px; }
+.plan-topic { font-size: 10px; color: #4F46E5; background: #EEF2FF; padding: 1px 5px; border-radius: 3px; }
+.task-duration { font-size: 10px; color: #9CA3AF; }
+.task-desc { font-size: 11px; color: #6B7280; margin-top: 3px; }
 </style>

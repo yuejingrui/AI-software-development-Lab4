@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="dialog-overlay" @click.self="$emit('close')">
+  <div v-if="visible" class="dialog-overlay">
     <div class="dialog">
       <div class="dialog-header">
         <h2>新建学习计划</h2>
@@ -127,9 +127,9 @@
       </div>
 
       <div class="dialog-footer">
-        <button class="btn-cancel" @click="$emit('close')" :disabled="submitting">取消</button>
-        <button class="btn-primary" @click="handleSubmit" :disabled="submitting">
-          {{ submitting ? '生成中...' : '生成计划' }}
+        <button class="btn-cancel" @click="$emit('close')" :disabled="props.submitting">取消</button>
+        <button class="btn-primary" @click="handleSubmit" :disabled="props.submitting">
+          {{ props.submitting ? '⏳ 生成中...' : '生成计划' }}
         </button>
       </div>
     </div>
@@ -143,7 +143,7 @@ import type { TagView, UserProfile, CreatePlanRequest } from '@/types'
 import { getRandomTagColor } from '@/services/data'
 import { suggestAiCompletion } from '@/services/data'
 
-const props = defineProps<{ visible: boolean }>()
+const props = defineProps<{ visible: boolean; submitting: boolean }>()
 const emit = defineEmits<{
   close: []
   submit: [data: CreatePlanRequest]
@@ -168,7 +168,6 @@ const form = reactive({
 })
 
 const tagInput = ref('')
-const submitting = ref(false)
 const errorMsg = ref('')
 const aiSuggestions = ref<{ filledFields: string[]; suggestions: Record<string, string>; source: string } | null>(null)
 
@@ -249,32 +248,27 @@ async function handleSubmit() {
 
   await checkAiCompletion()
 
-  submitting.value = true
-  try {
-    const userProfile: UserProfile = {
-      type: form.userProfileType,
-      customText: form.userProfileType === '其他' ? form.userProfileCustom.trim() : ''
-    }
-    const references = form.referencesStr ? form.referencesStr.split(/[+、,，]/).map(s => s.trim()).filter(Boolean) : []
-
-    const data: CreatePlanRequest = {
-      topic: form.topic.trim(),
-      objective: form.topic.trim(),
-      startDate: form.startDate,
-      endDate: form.endDate,
-      dailyMinutes: form.dailyMinutes,
-      description: form.description.trim(),
-      references,
-      platforms: references,
-      userProfile,
-      expectedOutcome: form.expectedOutcome.trim(),
-      tags: [...form.tags],
-      notes: form.notes.trim()
-    }
-    emit('submit', data)
-  } finally {
-    submitting.value = false
+  const userProfile: UserProfile = {
+    type: form.userProfileType,
+    customText: form.userProfileType === '其他' ? form.userProfileCustom.trim() : ''
   }
+  const references = form.referencesStr ? form.referencesStr.split(/[+、,，]/).map(s => s.trim()).filter(Boolean) : []
+
+  const data: CreatePlanRequest = {
+    topic: form.topic.trim(),
+    objective: form.topic.trim(),
+    startDate: form.startDate,
+    endDate: form.endDate,
+    dailyMinutes: form.dailyMinutes,
+    description: form.description.trim(),
+    references,
+    platforms: references,
+    userProfile,
+    expectedOutcome: form.expectedOutcome.trim(),
+    tags: [...form.tags],
+    notes: form.notes.trim()
+  }
+  emit('submit', data)
 }
 </script>
 

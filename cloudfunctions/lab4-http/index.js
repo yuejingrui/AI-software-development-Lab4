@@ -13,11 +13,10 @@ const TASKS_COLL = "study_tasks";
 const CHAT_COLL = "plan_chat_messages";
 
 function sendJson(res, statusCode, data) {
-  // 不在此处设置 CORS 头 —— CloudBase 网关已自动注入
-  res.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8"
-  });
-  res.end(JSON.stringify(data));
+  const json = JSON.stringify(data);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.writeHead(statusCode);
+  res.end(json, "utf8");
 }
 
 function readJsonBody(req) {
@@ -525,6 +524,20 @@ async function handleSuggestCompletion(body) {
   };
 }
 
+async function handleDeletePlan(body) {
+  const { planId } = body;
+  if (!planId) throw new Error("缺少必填字段：planId");
+
+  // 删除关联任务
+  await db.collection(TASKS_COLL).where({ planId }).remove();
+  // 删除关联聊天
+  await db.collection(CHAT_COLL).where({ planId }).remove();
+  // 删除计划本身
+  await db.collection(PLANS_COLL).doc(planId).remove();
+
+  return { success: true };
+}
+
 const ACTIONS = {
   createPlan: handleCreatePlan,
   listPlans: handleListPlans,
@@ -536,7 +549,8 @@ const ACTIONS = {
   saveChatMessage: handleSaveChatMessage,
   generateTasks: handleGenerateTasks,
   refinePlan: handleRefinePlan,
-  suggestCompletion: handleSuggestCompletion
+  suggestCompletion: handleSuggestCompletion,
+  deletePlan: handleDeletePlan
 };
 
 const ROUTES = {
@@ -550,7 +564,8 @@ const ROUTES = {
   "POST /saveChatMessage": handleSaveChatMessage,
   "POST /generateTasks": handleGenerateTasks,
   "POST /refinePlan": handleRefinePlan,
-  "POST /suggestCompletion": handleSuggestCompletion
+  "POST /suggestCompletion": handleSuggestCompletion,
+  "POST /deletePlan": handleDeletePlan
 };
 
 const server = http.createServer(async (req, res) => {

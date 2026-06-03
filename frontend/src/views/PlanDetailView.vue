@@ -2,7 +2,10 @@
   <div class="plan-detail">
     <!-- 顶部 -->
     <header class="detail-header">
-      <button class="btn-back" @click="$router.push('/')">&larr; 返回工作台</button>
+      <div class="header-top">
+        <button class="btn-back" @click="$router.push('/')">&larr; 返回工作台</button>
+        <button class="btn-delete" @click="showDeleteConfirm = true">删除计划</button>
+      </div>
       <div v-if="plan" class="plan-info">
         <h2>{{ plan.plan.topic }}</h2>
         <div class="plan-meta">
@@ -13,6 +16,20 @@
         <div v-if="plan.plan.description" class="plan-desc">{{ plan.plan.description }}</div>
       </div>
     </header>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteConfirm" class="confirm-overlay">
+      <div class="confirm-dialog">
+        <h3>确认删除</h3>
+        <p>确定要删除计划「{{ plan?.plan.topic }}」吗？该计划下的所有任务和对话记录也将一并删除，此操作不可恢复。</p>
+        <div class="confirm-actions">
+          <button class="btn-cancel" @click="showDeleteConfirm = false">取消</button>
+          <button class="btn-confirm-delete" @click="handleDelete" :disabled="deleting">
+            {{ deleting ? '删除中...' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="toast" :class="['toast', toast.type]">{{ toast.message }}</div>
 
@@ -97,15 +114,16 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import TagChip from '@/components/TagChip.vue'
 import type { PlanDetail, PlanChatMessage } from '@/types'
 import {
   getPlanDetail, updateTaskStatus, updateTaskInfo,
-  refinePlan, saveChatMessage
+  refinePlan, saveChatMessage, deletePlan
 } from '@/services/data'
 
 const route = useRoute()
+const router = useRouter()
 const planId = computed(() => route.params.planId as string)
 
 const toast = ref<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -115,6 +133,8 @@ const chatMessages = ref<PlanChatMessage[]>([])
 const chatInput = ref('')
 const chatLoading = ref(false)
 const chatContainer = ref<HTMLElement | null>(null)
+const showDeleteConfirm = ref(false)
+const deleting = ref(false)
 
 const editingTaskId = ref<string | null>(null)
 const editForm = ref({ title: '', description: '', estimatedMinutes: 90, date: '', priority: 'medium' })
@@ -180,6 +200,20 @@ function cancelEdit() {
   editingTaskId.value = null
 }
 
+async function handleDelete() {
+  deleting.value = true
+  try {
+    await deletePlan(planId.value)
+    showDeleteConfirm.value = false
+    router.push('/')
+  } catch {
+    toast.value = { message: '删除失败，请重试', type: 'error' }
+    setTimeout(() => { toast.value = null }, 3000)
+  } finally {
+    deleting.value = false
+  }
+}
+
 async function sendChatMessage() {
   const msg = chatInput.value.trim()
   if (!msg || chatLoading.value) return
@@ -219,10 +253,30 @@ onMounted(() => {
   display: flex; flex-direction: column; box-sizing: border-box;
 }
 .detail-header { margin-bottom: 12px; }
+.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .btn-back {
   background: none; border: none; color: #4F46E5; cursor: pointer;
-  font-size: 14px; padding: 4px 0; margin-bottom: 8px;
+  font-size: 14px; padding: 4px 0;
 }
+.btn-delete {
+  background: none; border: 1px solid #FCA5A5; color: #EF4444;
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.btn-delete:hover { background: #FEF2F2; }
+.confirm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.confirm-dialog {
+  background: #fff; border-radius: 12px; padding: 24px; width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.confirm-dialog h3 { margin: 0 0 12px; font-size: 16px; }
+.confirm-dialog p { font-size: 14px; color: #6B7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.btn-cancel { padding: 6px 16px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; }
+.btn-confirm-delete { padding: 6px 16px; border: none; border-radius: 6px; background: #EF4444; color: #fff; cursor: pointer; font-size: 14px; }
+.btn-confirm-delete:disabled { opacity: 0.6; cursor: not-allowed; }
 .plan-info h2 { font-size: 20px; margin: 0 0 6px; }
 .plan-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
 .date-range { font-size: 13px; color: #6B7280; }

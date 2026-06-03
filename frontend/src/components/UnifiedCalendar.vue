@@ -76,7 +76,14 @@ interface CalendarCell {
   tags: TagView[]
 }
 
-const today = new Date().toISOString().split('T')[0]
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const today = formatLocalDate(new Date())
 
 const calendarCells = computed<CalendarCell[]>(() => {
   const year = props.year
@@ -93,7 +100,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
   // Previous month padding
   for (let i = firstDay - 1; i >= 0; i--) {
     const d = new Date(year, month - 1, daysInPrevMonth - i)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = formatLocalDate(d)
     const dayInfo = dayMap.get(dateStr)
     cells.push({
       date: dateStr,
@@ -109,7 +116,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
   // Current month
   for (let day = 1; day <= daysInMonth; day++) {
     const d = new Date(year, month, day)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = formatLocalDate(d)
     const dayInfo = dayMap.get(dateStr)
     cells.push({
       date: dateStr,
@@ -126,7 +133,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
   const remaining = 42 - cells.length
   for (let day = 1; day <= remaining; day++) {
     const d = new Date(year, month + 1, day)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = formatLocalDate(d)
     const dayInfo = dayMap.get(dateStr)
     cells.push({
       date: dateStr,
@@ -156,24 +163,25 @@ function nextMonth() {
 </script>
 
 <style scoped>
-.calendar { width: 100%; }
+.calendar { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .calendar-header {
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-  margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-bottom: 4px;
 }
-.month-title { font-size: 16px; font-weight: 600; }
-.nav-btn { background: #f3f4f6; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 16px; }
+.month-title { font-size: 13px; font-weight: 600; }
+.nav-btn { background: #f3f4f6; border: none; border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 13px; }
 .weekdays {
   display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
-  font-size: 12px; color: #6B7280; margin-bottom: 4px;
+  font-size: 10px; color: #6B7280; margin-bottom: 2px;
 }
 .days-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; flex: 1;
+  align-content: start;
 }
 .day-cell {
   aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; border-radius: 8px; cursor: pointer; position: relative;
-  font-size: 13px; transition: background 0.15s; min-height: 56px;
+  justify-content: center; border-radius: 6px; cursor: pointer; position: relative;
+  font-size: 10px; transition: background 0.15s; padding: 1px;
 }
 .day-cell:hover { background: #f3f4f6; }
 .day-cell.other-month .day-num { color: #d1d5db; }
@@ -182,11 +190,11 @@ function nextMonth() {
 .day-cell.all-done { background: #ECFDF5; }
 .day-cell.partial-done { background: #FFF7ED; }
 .day-cell.has-tasks { font-weight: 500; }
-.day-num { font-size: 13px; }
-.day-info { display: flex; flex-direction: column; align-items: center; gap: 1px; margin-top: 2px; }
-.task-progress { font-size: 11px; color: #4F46E5; font-weight: 600; }
-.task-count { font-size: 11px; color: #6B7280; }
-.tag-dots { display: flex; gap: 3px; align-items: center; margin-top: 1px; }
-.tag-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-.tag-more { font-size: 10px; color: #9CA3AF; }
+.day-num { font-size: 10px; line-height: 1; }
+.day-info { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 1px; }
+.task-progress { font-size: 9px; color: #4F46E5; font-weight: 600; }
+.task-count { font-size: 9px; color: #6B7280; }
+.tag-dots { display: flex; gap: 2px; align-items: center; margin-top: 1px; }
+.tag-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+.tag-more { font-size: 8px; color: #9CA3AF; }
 </style>
