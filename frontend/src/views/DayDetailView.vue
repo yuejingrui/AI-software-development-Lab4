@@ -72,7 +72,7 @@
           <div class="subtask-section">
             <div class="subtask-header">
               <span class="subtask-label">
-                步骤 ({{ getSubs(task).length }})
+                子任务 ({{ getSubs(task).length }})
                 <span v-if="subtaskProgress(task) !== null" class="subtask-progress">
                   {{ subtaskProgress(task) }}/{{ getSubs(task).length }} 完成
                 </span>
@@ -82,7 +82,7 @@
                 :disabled="splittingTaskId === task.id"
                 @click="handleAiSplit(task)"
               >
-                {{ splittingTaskId === task.id ? '拆分中...' : 'AI拆分步骤' }}
+                {{ splittingTaskId === task.id ? '拆分中...' : 'AI拆分子任务' }}
               </button>
             </div>
 
@@ -138,7 +138,7 @@
               <input
                 v-model="newSubtaskTitles[task.id]"
                 class="add-subtask-input"
-                placeholder="+ 添加步骤"
+                placeholder="+ 添加子任务"
                 @keyup.enter="handleAddSubtask(task)"
               />
             </div>
@@ -276,7 +276,8 @@ async function loadData() {
 async function loadSubtasksForTask(task: DayTaskView) {
   try {
     task.subtasks = await getSubtasks(task.id)
-  } catch {
+  } catch (e) {
+    console.error('加载子任务失败:', e)
     task.subtasks = []
   }
 }
@@ -347,8 +348,8 @@ async function handleAiSplit(task: DayTaskView) {
   splittingTaskId.value = task.id
   try {
     task.subtasks = await generateSubtasks(task.id)
-  } catch {
-    // 静默失败
+  } catch (e) {
+    console.error('AI 拆分子任务失败:', e)
   } finally {
     splittingTaskId.value = null
   }
@@ -362,8 +363,8 @@ async function handleAddSubtask(task: DayTaskView) {
     const sub = await createSubtask(task.id, task.planId, title)
     if (!task.subtasks) task.subtasks = []
     task.subtasks.push(sub)
-  } catch {
-    // 静默失败
+  } catch (e) {
+    console.error('添加子任务失败:', e)
   }
 }
 

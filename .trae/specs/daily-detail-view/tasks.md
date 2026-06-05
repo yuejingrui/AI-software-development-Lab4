@@ -12,6 +12,7 @@
 
 - [ ] 在 `DayDetailView.vue` 中调用 `getTasksByDate(date)` 获取当天任务。
   - 添加 loading 状态和错误处理。
+  - 若子任务查询失败，主任务列表仍需正常展示，子任务区域降级为空列表。
 - [ ] 实现前端任务分组逻辑（`groupTasksByPlan`）。
 - [ ] 渲染任务列表：按计划分组展示。
   - 每个分组标题：计划名称（可点击进入 `plan/:planId`）。
@@ -38,9 +39,8 @@
 
 ## 阶段 5：首页入口改造
 
-- [ ] 修改 `HomeView.vue` 或 `DayTaskPanel.vue`：点击有任务日期时跳转 `/day/:date`。
-  - 推荐：在 `DayTaskPanel` 顶部添加「查看完整详情 →」链接。
-  - 或：在日历组件中点击日期直接跳转。
+- [ ] 修改 `HomeView.vue` 与 `DayTaskPanel.vue`：点击日历日期时仅刷新左侧预览，不直接跳转。
+  - 在 `DayTaskPanel` 顶部添加「查看完整详情 →」链接进入 `/day/:date`。
 - [ ] `DayTaskPanel` 中的任务点击新增跳转到 `/plan/:planId`。
 
 ## 阶段 6：子任务数据层
@@ -62,6 +62,10 @@
 - [ ] 云函数新增 `updateSubtaskStatus` API。
   - 接收 `subtaskId`、`completed`，更新子任务完成状态。
 - [ ] 云函数修改 `getTasksByDate`，每个任务附带其 `subtasks` 列表。
+- [ ] 为 `getTasksByDate` / `getSubtasks` 中的子任务查询增加容错降级。
+  - 优先按 `sortOrder` 查询。
+  - 若因集合、索引或排序查询异常失败，则回退到普通查询并在内存中排序。
+  - 子任务查询失败时不得影响主任务返回。
 - [ ] 在 `data.ts` 中新增前端调用函数：
   - `generateSubtasks(taskId)`、`createSubtask(taskId, planId, title)`
   - `updateSubtask(subtaskId, title)`、`deleteSubtask(subtaskId)`
@@ -72,10 +76,10 @@
 - [ ] 在 `DayDetailView.vue` 任务卡片下方渲染子任务列表（缩进展示）。
   - 每个子任务：checkbox + 标题（已完成时删除线 + 颜色变淡）+ 编辑按钮 + 删除按钮。
   - 显示子任务完成进度（如「已完成 2/3 步」）。
-- [ ] 实现「AI 拆分步骤」按钮。
-  - 无子任务时显示「AI 拆分步骤」，已有子任务时显示「重新拆分」。
+- [ ] 实现「AI 拆分子任务」按钮。
+  - 无子任务时显示「AI 拆分子任务」，已有子任务时显示「重新拆分」。
   - 点击后 loading 状态，防止重复点击。
-- [ ] 实现手动创建子任务：子任务列表末尾「+ 添加步骤」输入框。
+- [ ] 实现手动创建子任务：子任务列表末尾「+ 添加子任务」输入框。
   - 输入标题后回车 → 调用 `createSubtask` → 即时显示在列表中。
   - 空标题时不提交。
 - [ ] 实现修改子任务标题：点击编辑按钮 → 标题变为输入框 → 回车或失焦保存。

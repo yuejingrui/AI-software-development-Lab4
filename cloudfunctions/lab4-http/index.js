@@ -5,6 +5,20 @@ const app = cloudbase.init({ env: process.env.TCB_ENV_ID || "lab3-3-d5gdcm7qo10c
 const db = app.database();
 const _ = db.command;
 
+// Ensure subtask collection exists on cold start
+async function ensureSubtaskCollection() {
+  try {
+    await db.createCollection(SUBTASKS_COLL);
+    console.log("Created study_subtasks collection");
+  } catch (e) {
+    // Collection already exists — this is the expected case after first run
+    if (!(e?.message || "").includes("already exist")) {
+      console.warn("ensureSubtaskCollection:", e?.message || e);
+    }
+  }
+}
+ensureSubtaskCollection();
+
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
@@ -320,6 +334,51 @@ async function filterOrphanTasks(tasks) {
   return tasks.filter((task) => validPlanIds.has(task.planId));
 }
 
+function sortSubtasksByOrder(subtasks, direction = "asc") {
+  const factor = direction === "desc" ? -1 : 1;
+  return [...(subtasks || [])].sort((a, b) => {
+    const left = Number(a?.sortOrder || 0);
+    const right = Number(b?.sortOrder || 0);
+    return (left - right) * factor;
+  });
+}
+
+async function listSubtasksByTaskId(taskId, options = {}) {
+  const { source, direction = "asc", limit } = options;
+  const where = source ? { taskId, source } : { taskId };
+
+  // First attempt: ordered query (needs index)
+  try {
+    let query = db.collection(SUBTASKS_COLL).where(where).orderBy("sortOrder", direction);
+    if (typeof limit === "number") {
+      query = query.limit(limit);
+    }
+    const result = await query.get();
+    return sortSubtasksByOrder(result.data || [], direction);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    console.warn("listSubtasksByTaskId ordered query failed:", msg);
+  }
+
+  // Second attempt: plain query without ordering (no index needed)
+  try {
+    let query = db.collection(SUBTASKS_COLL).where(where);
+    if (typeof limit === "number") {
+      query = query.limit(limit);
+    }
+    const result = await query.get();
+    return sortSubtasksByOrder(result.data || [], direction);
+  } catch (error) {
+    const msg = error?.message || String(error);
+    // Collection doesn't exist yet — first write will create it
+    if (msg.includes("not exist") || msg.includes("DATABASE_COLLECTION_NOT_EXIST")) {
+      return [];
+    }
+    console.warn("listSubtasksByTaskId plain query also failed:", msg);
+    return [];
+  }
+}
+
 async function handleCreatePlan(body) {
   if (!body.topic) throw new Error("缺少必填字段：topic");
   if (!body.startDate || !body.endDate) throw new Error("缺少必填字段：日期");
@@ -462,7 +521,7 @@ async function handleGetTasksByDate(body) {
   tasks = await filterOrphanTasks(tasks);
   const planMap = await getPlanMap();
 
-  const enriched = tasks
+  return tasks
     .map((task, index) => {
       const plan = planMap.get(task.planId);
       if (!plan) return null;
@@ -483,21 +542,6 @@ async function handleGetTasksByDate(body) {
       };
     })
     .filter(Boolean);
-
-  const tasksWithSubtasks = await Promise.all(
-    enriched.map(async (task) => {
-      const subtaskResult = await db.collection(SUBTASKS_COLL)
-        .where({ taskId: task.id })
-        .orderBy("sortOrder", "asc")
-        .get();
-      return {
-        ...task,
-        subtasks: subtaskResult.data || []
-      };
-    })
-  );
-
-  return tasksWithSubtasks;
 }
 
 async function handleGetPlanDetail(body) {
@@ -631,12 +675,17 @@ async function handleGenerateSubtasks(body) {
   const plan = await getPlanById(task.planId);
   const planTopic = plan?.topic || "未知计划";
 
-  await db.collection(SUBTASKS_COLL).where({
-    taskId,
-    source: "ai"
-  }).remove();
+  // Delete old AI subtasks (ignore errors if collection doesn't exist yet)
+  try {
+    const oldAi = await listSubtasksByTaskId(taskId, { source: "ai" });
+    for (const sub of oldAi) {
+      await db.collection(SUBTASKS_COLL).doc(sub._id).remove();
+    }
+  } catch {
+    // If the subtask collection or docs can't be accessed, continue anyway
+  }
 
-  const prompt = `你是一个学习任务拆分助手。请根据以下任务信息，生成 3-5 个具体的、可逐个执行的小步骤。\n任务标题：${task.title}\n任务说明：${task.description || ""}\n所属计划：${planTopic}\n预计时长：${task.estimatedMinutes || 60} 分钟\n\n输出必须是严格 JSON 数组格式，每个元素包含 title 字段：\n[{"title": "步骤名称"}, ...]`;
+  const prompt = `你是一个学习任务拆分助手。请根据以下任务信息，生成 3-5 个具体的、可逐个执行的子任务。\n任务标题：${task.title}\n任务说明：${task.description || ""}\n所属计划：${planTopic}\n预计时长：${task.estimatedMinutes || 60} 分钟\n\n输出必须是严格 JSON 数组格式，每个元素包含 title 字段：\n[{"title": "子任务名称"}, ...]`;
 
   let subtaskList;
   if (DEEPSEEK_API_KEY) {
@@ -651,8 +700,8 @@ async function handleGenerateSubtasks(body) {
           subtaskList = parsed;
         }
       }
-    } catch {
-      // fall through to fallback
+    } catch (e) {
+      console.warn("AI subtask generation failed:", e?.message || e);
     }
   }
 
@@ -664,12 +713,11 @@ async function handleGenerateSubtasks(body) {
     ];
   }
 
-  const existingResult = await db.collection(SUBTASKS_COLL)
-    .where({ taskId, source: "user" })
-    .orderBy("sortOrder", "desc")
-    .limit(1)
-    .get();
-  const existingSubtasks = existingResult.data || [];
+  const existingSubtasks = await listSubtasksByTaskId(taskId, {
+    source: "user",
+    direction: "desc",
+    limit: 1
+  });
   const maxSortOrder = existingSubtasks.length > 0 ? (existingSubtasks[0].sortOrder || 0) : 0;
 
   const newSubtasks = [];
@@ -685,14 +733,20 @@ async function handleGenerateSubtasks(body) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    const result = await db.collection(SUBTASKS_COLL).add(doc);
-    newSubtasks.push({
-      _id: result.id || result._id,
-      ...doc
-    });
+    try {
+      const result = await db.collection(SUBTASKS_COLL).add(doc);
+      newSubtasks.push({
+        _id: result.id || result._id,
+        ...doc
+      });
+    } catch (e) {
+      console.warn("Failed to create AI subtask:", e?.message || e);
+    }
   }
 
-  return { subtasks: newSubtasks };
+  // Return all subtasks so user-created ones are not lost on frontend
+  const allSubtasks = await listSubtasksByTaskId(taskId);
+  return { subtasks: allSubtasks };
 }
 
 async function handleCreateSubtask(body) {
@@ -700,12 +754,10 @@ async function handleCreateSubtask(body) {
   if (!taskId) throw new Error("缺少必填字段：taskId");
   if (!title) throw new Error("缺少必填字段：title");
 
-  const existingResult = await db.collection(SUBTASKS_COLL)
-    .where({ taskId })
-    .orderBy("sortOrder", "desc")
-    .limit(1)
-    .get();
-  const existing = existingResult.data || [];
+  const existing = await listSubtasksByTaskId(taskId, {
+    direction: "desc",
+    limit: 1
+  });
   const maxSortOrder = existing.length > 0 ? (existing[0].sortOrder || 0) : 0;
 
   const doc = {
@@ -764,11 +816,7 @@ async function handleGetSubtasks(body) {
   const { taskId } = body;
   if (!taskId) throw new Error("缺少必填字段：taskId");
 
-  const result = await db.collection(SUBTASKS_COLL)
-    .where({ taskId })
-    .orderBy("sortOrder", "asc")
-    .get();
-  const subtasks = result.data || [];
+  const subtasks = await listSubtasksByTaskId(taskId);
 
   return { subtasks };
 }
@@ -1036,6 +1084,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(9000, () => {
+server.listen(9000, async () => {
+  // Create subtask collection before handling requests
+  await ensureSubtaskCollection();
   console.log("lab4-http server listening on port 9000");
 });
