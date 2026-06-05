@@ -1,0 +1,18 @@
+{
+  "name": "lab4-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Automated acceptance tests for Lab4 学习计划工作台",
+  "scripts": {
+    "test": "node --test src/run.js",
+    "test:verbose": "node --test --test-reporter=spec src/run.js",
+    "test:workbench": "node --test src/specs/study-plan-workbench.test.js",
+    "test:identity": "node --test src/specs/require-user-identity.test.js",
+    "test:calendar": "node --test src/specs/unified-calendar-enhance.test.js",
+    "test:daily": "node --test src/specs/daily-detail-view.test.js"
+  },
+  "engines": {
+    "node": ">=18.15.0"
+  }
+}
