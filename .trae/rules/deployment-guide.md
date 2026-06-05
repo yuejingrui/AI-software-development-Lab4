@@ -50,8 +50,8 @@ MSYS_NO_PATHCONV=1 npx mcporter call cloudbase.manageFunctions \
 ```
 
 ```powershell
-# PowerShell 环境（当前终端）
-mcporter call cloudbase.manageFunctions action=updateFunctionCode functionName=lab4-http functionRootPath=cloudfunctions --output json
+# PowerShell 环境 - 必须使用绝对路径
+mcporter call cloudbase.manageFunctions action=updateFunctionCode functionName=lab4-http functionRootPath="d:/FuDan/生成式软件开发/Lab4/cloudfunctions" --output json
 ```
 
 **验签**：

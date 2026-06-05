@@ -21,13 +21,14 @@ function sendJson(res, statusCode, data) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = "";
-    req.on("data", (chunk) => { raw += chunk; });
+    const chunks = [];
+    req.on("data", (chunk) => { chunks.push(chunk); });
     req.on("end", () => {
-      if (!raw) {
+      if (chunks.length === 0) {
         resolve({});
         return;
       }
+      const raw = Buffer.concat(chunks).toString("utf8");
       try {
         resolve(JSON.parse(raw));
       } catch (error) {
