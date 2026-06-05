@@ -3,12 +3,13 @@
  *
  * 映射自 .trae/specs/require-user-identity/checklist.md
  */
-import { describe, it } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
 import * as api from "../api.js";
-import { assertThrows, makePlanData, trackPlan } from "../utils.js";
+import { assertThrows, makePlanData, trackPlan, cleanupTestPlans } from "../utils.js";
 
 describe("require-user-identity", () => {
+  after(cleanupTestPlans);
   // ─── 必填验证 ──────────────────────────────────────
 
   it("创建计划表单将用户身份标记为必填项（缺失时云函数应拒绝）", async () => {

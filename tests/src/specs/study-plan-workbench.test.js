@@ -9,17 +9,11 @@ import * as api from "../api.js";
 import {
   todayStr, dayAfter, assertArray, assertFields,
   assertThrows, makePlanData, trackPlan, trackTask,
-  uniqueId,
+  uniqueId, cleanupTestPlans,
 } from "../utils.js";
 
 describe("study-plan-workbench", () => {
-  // 集中清理
-  after(async () => {
-    const { testState } = await import("../utils.js");
-    for (const id of testState.createdPlanIds) {
-      try { await api.deletePlan(id); } catch { /* ignore */ }
-    }
-  });
+  after(cleanupTestPlans);
 
   // ═══════════════════════════════════════════════════════
   // 一、计划创建

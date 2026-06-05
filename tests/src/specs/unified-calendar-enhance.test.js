@@ -3,16 +3,17 @@
  *
  * 映射自 .trae/specs/unified-calendar-enhance/checklist.md
  */
-import { describe, it, before } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import * as api from "../api.js";
 import {
   todayStr, tomorrowStr, monthRange,
   assertArray, assertFields, assertDateString,
-  makePlanData, trackPlan,
+  makePlanData, trackPlan, cleanupTestPlans,
 } from "../utils.js";
 
 describe("unified-calendar-enhance", () => {
+  after(cleanupTestPlans);
   let testPlanId;
   const now = new Date();
   const range = monthRange(now.getFullYear(), now.getMonth());

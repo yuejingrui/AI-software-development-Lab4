@@ -9,10 +9,11 @@ import * as api from "../api.js";
 import {
   todayStr, dayAfter, assertArray, assertFields,
   assertThrows, makePlanData, trackPlan, trackSubtask,
-  uniqueId,
+  uniqueId, cleanupTestPlans,
 } from "../utils.js";
 
 describe("daily-detail-view", () => {
+  after(cleanupTestPlans);
   // ═══════════════════════════════════════════════════════
   // 一、路由与页面（API 层验证）
   // ═══════════════════════════════════════════════════════

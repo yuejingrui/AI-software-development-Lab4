@@ -136,3 +136,16 @@ export function trackSubtask(id) {
     testState.createdSubtaskIds.push(id);
   }
 }
+
+/**
+ * Delete all test-created plans (and their tasks/subtasks cascade).
+ * Safe to call even if plan was already deleted.
+ */
+export async function cleanupTestPlans() {
+  for (const id of testState.createdPlanIds) {
+    try { await (await import("./api.js")).deletePlan(id); } catch { /* already deleted */ }
+  }
+  testState.createdPlanIds.length = 0;
+  testState.createdTaskIds.length = 0;
+  testState.createdSubtaskIds.length = 0;
+}
