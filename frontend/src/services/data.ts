@@ -47,6 +47,14 @@ export async function deletePlan(planId: string): Promise<boolean> {
   return !!result.success
 }
 
+export async function cleanupOrphanTasks(): Promise<{ cleaned: number; message: string }> {
+  try {
+    return await callHttpFunction('cleanupOrphanTasks', {})
+  } catch {
+    return { cleaned: 0, message: '清理失败' }
+  }
+}
+
 export async function updateTaskInfo(taskId: string, updates: { title?: string; description?: string; estimatedMinutes?: number; date?: string; priority?: string; tags?: TagView[] }): Promise<boolean> {
   const result = await callHttpFunction('updateTaskInfo', { taskId, ...updates })
   return !!result.success

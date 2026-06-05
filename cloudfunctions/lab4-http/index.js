@@ -154,6 +154,18 @@ async function getPlanTopicMap() {
   return map;
 }
 
+async function getValidPlanIds() {
+  const result = await db.collection(PLANS_COLL).get();
+  const plans = Array.isArray(result.data) ? result.data : [];
+  return new Set(plans.map((p) => p._id));
+}
+
+async function filterOrphanTasks(tasks) {
+  if (!tasks || tasks.length === 0) return tasks;
+  const validPlanIds = await getValidPlanIds();
+  return tasks.filter((task) => validPlanIds.has(task.planId));
+}
+
 async function handleCreatePlan(body) {
   if (!body.topic) throw new Error("缺少必填字段：topic");
   if (!body.startDate || !body.endDate) throw new Error("缺少必填字段：日期");
@@ -252,7 +264,8 @@ async function handleGetCalendarTasks(body) {
   const result = await db.collection(TASKS_COLL)
     .where({ date: _.gte(startDate).and(_.lte(endDate)) })
     .get();
-  const tasks = result.data || [];
+  let tasks = result.data || [];
+  tasks = await filterOrphanTasks(tasks);
   const dayMap = new Map();
 
   for (const task of tasks) {
@@ -283,7 +296,8 @@ async function handleGetCalendarTasks(body) {
 
 async function handleGetTasksByDate(body) {
   const result = await db.collection(TASKS_COLL).where({ date: body.date }).get();
-  const tasks = result.data || [];
+  let tasks = result.data || [];
+  tasks = await filterOrphanTasks(tasks);
   const planTopicMap = await getPlanTopicMap();
 
   return tasks.map((task) => ({
@@ -530,13 +544,37 @@ async function handleDeletePlan(body) {
   if (!planId) throw new Error("缺少必填字段：planId");
 
   // 删除关联任务
-  await db.collection(TASKS_COLL).where({ planId }).remove();
+  const taskResult = await db.collection(TASKS_COLL).where({ planId }).remove();
   // 删除关联聊天
   await db.collection(CHAT_COLL).where({ planId }).remove();
   // 删除计划本身
   await db.collection(PLANS_COLL).doc(planId).remove();
 
-  return { success: true };
+  return { success: true, deletedTasks: taskResult.deleted || 0 };
+}
+
+async function handleCleanupOrphanTasks() {
+  const allTasks = await db.collection(TASKS_COLL).get();
+  const tasks = allTasks.data || [];
+  const validPlanIds = await getValidPlanIds();
+  const orphanIds = tasks
+    .filter((task) => !validPlanIds.has(task.planId))
+    .map((task) => task._id);
+
+  if (orphanIds.length === 0) {
+    return { success: true, cleaned: 0, message: "没有孤儿任务" };
+  }
+
+  // 批量删除孤儿任务
+  const batchSize = 50;
+  let cleaned = 0;
+  for (let i = 0; i < orphanIds.length; i += batchSize) {
+    const batch = orphanIds.slice(i, i + batchSize);
+    await Promise.all(batch.map((id) => db.collection(TASKS_COLL).doc(id).remove()));
+    cleaned += batch.length;
+  }
+
+  return { success: true, cleaned, message: `已清理 ${cleaned} 个孤儿任务` };
 }
 
 const ACTIONS = {
@@ -551,7 +589,8 @@ const ACTIONS = {
   generateTasks: handleGenerateTasks,
   refinePlan: handleRefinePlan,
   suggestCompletion: handleSuggestCompletion,
-  deletePlan: handleDeletePlan
+  deletePlan: handleDeletePlan,
+  cleanupOrphanTasks: handleCleanupOrphanTasks
 };
 
 const ROUTES = {
@@ -566,7 +605,8 @@ const ROUTES = {
   "POST /generateTasks": handleGenerateTasks,
   "POST /refinePlan": handleRefinePlan,
   "POST /suggestCompletion": handleSuggestCompletion,
-  "POST /deletePlan": handleDeletePlan
+  "POST /deletePlan": handleDeletePlan,
+  "POST /cleanupOrphanTasks": handleCleanupOrphanTasks
 };
 
 const server = http.createServer(async (req, res) => {

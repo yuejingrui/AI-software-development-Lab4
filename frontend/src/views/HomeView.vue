@@ -79,7 +79,7 @@ import PlanCreateDialog from '@/components/PlanCreateDialog.vue'
 import type { CreatePlanRequest, PlanSummary, DayTaskView, CalendarDaySummary } from '@/types'
 import {
   createPlan, listPlans, getCalendarTasks,
-  getTasksByDate, updateTaskStatus, deletePlan
+  getTasksByDate, updateTaskStatus, deletePlan, cleanupOrphanTasks
 } from '@/services/data'
 
 function formatLocalDate(d: Date): string {
@@ -242,7 +242,9 @@ function handleSelectPlan(planId: string) {
   router.push(`/plan/${planId}`)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 静默清理孤儿任务
+  cleanupOrphanTasks().catch(() => {})
   loadAll()
   loadDayTasks()
 })
