@@ -5,6 +5,7 @@
       <div v-if="filteredTasks.length > 0" class="task-summary">
         {{ completedCount }}/{{ filteredTasks.length }} 已完成
       </div>
+      <router-link v-if="date" :to="`/day/${date}`" class="view-detail-link">查看完整详情 →</router-link>
     </div>
 
     <div v-if="!date" class="empty-hint">请点击日历中的日期查看任务详情</div>
@@ -43,7 +44,7 @@
                 <span v-if="task.taskNumber" class="task-number">{{ task.taskNumber }}</span>
               </div>
               <div class="task-meta">
-                <span class="plan-topic">{{ task.planTopic }}</span>
+                <span class="plan-topic" @click="router.push(`/plan/${task.planId}`)">{{ task.planTopic }}</span>
                 <TagChip
                   v-for="tag in task.tags"
                   :key="tag.name"
@@ -63,6 +64,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { DayTaskView } from '@/types'
 import TagChip from './TagChip.vue'
 
@@ -76,6 +78,8 @@ const props = defineProps<{
   selectedStatus: TaskStatusFilter
   togglingTaskId?: string | null
 }>()
+
+const router = useRouter()
 
 const emit = defineEmits<{
   toggleTask: [taskId: string, completed: boolean]
@@ -130,7 +134,10 @@ const sortedTasks = computed(() => {
 .task-title { font-size: 13px; font-weight: 500; word-break: break-word; }
 .task-number { font-size: 10px; color: #9CA3AF; white-space: nowrap; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 3px; }
-.plan-topic { font-size: 10px; color: #4F46E5; background: #EEF2FF; padding: 1px 5px; border-radius: 3px; }
+.plan-topic { font-size: 10px; color: #4F46E5; background: #EEF2FF; padding: 1px 5px; border-radius: 3px; cursor: pointer; }
+.plan-topic:hover { text-decoration: underline; }
+.view-detail-link { font-size: 11px; color: #4F46E5; text-decoration: none; display: block; margin-top: 4px; }
+.view-detail-link:hover { text-decoration: underline; }
 .task-duration { font-size: 10px; color: #9CA3AF; }
 .task-desc { font-size: 11px; color: #6B7280; margin-top: 3px; }
 </style>

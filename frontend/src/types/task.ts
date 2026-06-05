@@ -47,6 +47,19 @@ export interface DayTaskView {
   taskNumber?: string
   taskGroupKey?: string
   editSource: string
+  subtasks?: SubTask[]
+}
+
+export interface SubTask {
+  _id: string
+  taskId: string
+  planId: string
+  title: string
+  completed: boolean
+  source: 'user' | 'ai'
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface CalendarDaySummary {

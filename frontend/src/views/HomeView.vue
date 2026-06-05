@@ -207,6 +207,7 @@ async function loadDayTasks() {
 
 async function handleSelectDate(date: string) {
   selectedDate.value = date
+  router.push(`/day/${date}`)
   await loadDayTasks()
   const range = getMonthRange(currentYear.value, currentMonth.value)
   try {

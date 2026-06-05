@@ -13,6 +13,11 @@ const router = createRouter({
       name: 'plan-detail',
       component: () => import('@/views/PlanDetailView.vue'),
       props: true
+    },
+    {
+      path: '/day/:date',
+      name: 'day-detail',
+      component: () => import('@/views/DayDetailView.vue')
     }
   ]
 })

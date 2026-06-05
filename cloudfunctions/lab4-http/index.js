@@ -11,6 +11,7 @@ const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 const PLANS_COLL = "study_plans";
 const TASKS_COLL = "study_tasks";
 const CHAT_COLL = "plan_chat_messages";
+const SUBTASKS_COLL = "study_subtasks";
 const TAG_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16", "#F43F5E", "#14B8A6", "#EAB308", "#6366F1", "#EF4444"];
 
 function getTagColor(name) {
@@ -461,7 +462,7 @@ async function handleGetTasksByDate(body) {
   tasks = await filterOrphanTasks(tasks);
   const planMap = await getPlanMap();
 
-  return tasks
+  const enriched = tasks
     .map((task, index) => {
       const plan = planMap.get(task.planId);
       if (!plan) return null;
@@ -482,6 +483,21 @@ async function handleGetTasksByDate(body) {
       };
     })
     .filter(Boolean);
+
+  const tasksWithSubtasks = await Promise.all(
+    enriched.map(async (task) => {
+      const subtaskResult = await db.collection(SUBTASKS_COLL)
+        .where({ taskId: task.id })
+        .orderBy("sortOrder", "asc")
+        .get();
+      return {
+        ...task,
+        subtasks: subtaskResult.data || []
+      };
+    })
+  );
+
+  return tasksWithSubtasks;
 }
 
 async function handleGetPlanDetail(body) {
@@ -602,6 +618,159 @@ async function handleGenerateTasks(body) {
     expectedOutcome: parsed?.expectedOutcome || "",
     notes: parsed?.notes || ""
   };
+}
+
+async function handleGenerateSubtasks(body) {
+  const { taskId } = body;
+  if (!taskId) throw new Error("缺少必填字段：taskId");
+
+  const taskResult = await db.collection(TASKS_COLL).doc(taskId).get();
+  const task = Array.isArray(taskResult.data) ? taskResult.data[0] : taskResult.data;
+  if (!task) throw new Error("任务不存在");
+
+  const plan = await getPlanById(task.planId);
+  const planTopic = plan?.topic || "未知计划";
+
+  await db.collection(SUBTASKS_COLL).where({
+    taskId,
+    source: "ai"
+  }).remove();
+
+  const prompt = `你是一个学习任务拆分助手。请根据以下任务信息，生成 3-5 个具体的、可逐个执行的小步骤。\n任务标题：${task.title}\n任务说明：${task.description || ""}\n所属计划：${planTopic}\n预计时长：${task.estimatedMinutes || 60} 分钟\n\n输出必须是严格 JSON 数组格式，每个元素包含 title 字段：\n[{"title": "步骤名称"}, ...]`;
+
+  let subtaskList;
+  if (DEEPSEEK_API_KEY) {
+    try {
+      const content = await callDeepSeek([
+        { role: "user", content: prompt }
+      ]);
+      const match = content?.match(/\[[\s\S]*\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed)) {
+          subtaskList = parsed;
+        }
+      }
+    } catch {
+      // fall through to fallback
+    }
+  }
+
+  if (!subtaskList || !Array.isArray(subtaskList) || subtaskList.length === 0) {
+    subtaskList = [
+      { title: "阅读相关资料并做笔记" },
+      { title: "完成配套练习" },
+      { title: "总结关键知识点" }
+    ];
+  }
+
+  const existingResult = await db.collection(SUBTASKS_COLL)
+    .where({ taskId, source: "user" })
+    .orderBy("sortOrder", "desc")
+    .limit(1)
+    .get();
+  const existingSubtasks = existingResult.data || [];
+  const maxSortOrder = existingSubtasks.length > 0 ? (existingSubtasks[0].sortOrder || 0) : 0;
+
+  const newSubtasks = [];
+  for (let i = 0; i < subtaskList.length; i++) {
+    const sortOrder = maxSortOrder + i + 1;
+    const doc = {
+      taskId,
+      planId: task.planId,
+      title: subtaskList[i].title,
+      completed: false,
+      source: "ai",
+      sortOrder,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const result = await db.collection(SUBTASKS_COLL).add(doc);
+    newSubtasks.push({
+      _id: result.id || result._id,
+      ...doc
+    });
+  }
+
+  return { subtasks: newSubtasks };
+}
+
+async function handleCreateSubtask(body) {
+  const { taskId, planId, title } = body;
+  if (!taskId) throw new Error("缺少必填字段：taskId");
+  if (!title) throw new Error("缺少必填字段：title");
+
+  const existingResult = await db.collection(SUBTASKS_COLL)
+    .where({ taskId })
+    .orderBy("sortOrder", "desc")
+    .limit(1)
+    .get();
+  const existing = existingResult.data || [];
+  const maxSortOrder = existing.length > 0 ? (existing[0].sortOrder || 0) : 0;
+
+  const doc = {
+    taskId,
+    planId: planId || "",
+    title,
+    completed: false,
+    source: "user",
+    sortOrder: maxSortOrder + 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  const result = await db.collection(SUBTASKS_COLL).add(doc);
+  const subtask = {
+    _id: result.id || result._id,
+    ...doc
+  };
+
+  return { subtask };
+}
+
+async function handleUpdateSubtask(body) {
+  const { subtaskId, title } = body;
+  if (!subtaskId) throw new Error("缺少必填字段：subtaskId");
+
+  await db.collection(SUBTASKS_COLL).doc(subtaskId).update({
+    title: title || "",
+    updatedAt: new Date().toISOString()
+  });
+
+  return { success: true };
+}
+
+async function handleDeleteSubtask(body) {
+  const { subtaskId } = body;
+  if (!subtaskId) throw new Error("缺少必填字段：subtaskId");
+
+  await db.collection(SUBTASKS_COLL).doc(subtaskId).remove();
+
+  return { success: true };
+}
+
+async function handleUpdateSubtaskStatus(body) {
+  const { subtaskId, completed } = body;
+  if (!subtaskId) throw new Error("缺少必填字段：subtaskId");
+
+  await db.collection(SUBTASKS_COLL).doc(subtaskId).update({
+    completed: !!completed,
+    updatedAt: new Date().toISOString()
+  });
+
+  return { success: true };
+}
+
+async function handleGetSubtasks(body) {
+  const { taskId } = body;
+  if (!taskId) throw new Error("缺少必填字段：taskId");
+
+  const result = await db.collection(SUBTASKS_COLL)
+    .where({ taskId })
+    .orderBy("sortOrder", "asc")
+    .get();
+  const subtasks = result.data || [];
+
+  return { subtasks };
 }
 
 async function handleRefinePlan(body) {
@@ -799,6 +968,12 @@ const ACTIONS = {
   updateTaskInfo: handleUpdateTaskInfo,
   saveChatMessage: handleSaveChatMessage,
   generateTasks: handleGenerateTasks,
+  generateSubtasks: handleGenerateSubtasks,
+  createSubtask: handleCreateSubtask,
+  updateSubtask: handleUpdateSubtask,
+  deleteSubtask: handleDeleteSubtask,
+  updateSubtaskStatus: handleUpdateSubtaskStatus,
+  getSubtasks: handleGetSubtasks,
   refinePlan: handleRefinePlan,
   suggestCompletion: handleSuggestCompletion,
   deletePlan: handleDeletePlan,
@@ -816,6 +991,12 @@ const ROUTES = {
   "POST /updateTaskInfo": handleUpdateTaskInfo,
   "POST /saveChatMessage": handleSaveChatMessage,
   "POST /generateTasks": handleGenerateTasks,
+  "POST /generateSubtasks": handleGenerateSubtasks,
+  "POST /createSubtask": handleCreateSubtask,
+  "POST /updateSubtask": handleUpdateSubtask,
+  "POST /deleteSubtask": handleDeleteSubtask,
+  "POST /updateSubtaskStatus": handleUpdateSubtaskStatus,
+  "POST /getSubtasks": handleGetSubtasks,
   "POST /refinePlan": handleRefinePlan,
   "POST /suggestCompletion": handleSuggestCompletion,
   "POST /deletePlan": handleDeletePlan,

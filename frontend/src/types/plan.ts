@@ -5,6 +5,7 @@ export interface TagView {
   name: string
   color: string
   source?: 'user' | 'ai'
+  category?: 'subject' | 'purpose' | 'taskType' | string
 }
 
 export interface UserProfile {
@@ -65,6 +66,22 @@ export interface CreatePlanRequest {
   expectedOutcome: string
   tags: TagView[]
   notes: string
+}
+
+export interface UpdatePlanRequest {
+  planId: string
+  topic?: string
+  objective?: string
+  startDate?: string
+  endDate?: string
+  dailyMinutes?: number | null
+  description?: string
+  references?: string[]
+  platforms?: string[]
+  userProfile?: UserProfile
+  expectedOutcome?: string
+  tags?: TagView[]
+  notes?: string
 }
 
 export interface CreatePlanResponse {

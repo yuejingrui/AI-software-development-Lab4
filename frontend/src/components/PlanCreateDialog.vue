@@ -174,7 +174,7 @@ function addTag() {
   if (form.tags.some(t => t.name === name)) return
   form.tags.push({
     name,
-    color: getTagColor(name, form.tags.length)
+    color: getTagColor(name)
   })
   tagInput.value = ''
 }

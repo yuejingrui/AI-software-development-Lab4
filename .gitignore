@@ -48,3 +48,5 @@ config/
 .trae/*-help.txt
 .trae/*-describe.txt
 .trae/*-schema.json
+
+check.md

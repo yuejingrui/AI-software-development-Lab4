@@ -5,8 +5,9 @@
 import { callHttpFunction } from './cloudbase'
 import type {
   PlanSummary, PlanDetail, PlanChatMessage,
-  CalendarDaySummary, DayTaskView, TagView,
-  CreatePlanRequest, CreatePlanResponse
+  CalendarDaySummary, DayTaskView, TagView, SubTask,
+  CreatePlanRequest, CreatePlanResponse,
+  UpdatePlanRequest
 } from '@/types'
 
 export const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#14B8A6', '#EAB308', '#6366F1', '#EF4444']
@@ -16,9 +17,9 @@ export function getRandomTagColor(index: number): string {
   return TAG_COLORS[index % TAG_COLORS.length]
 }
 
-export function getTagColor(name: string, fallbackIndex = 0): string {
+export function getTagColor(name: string): string {
   const normalized = String(name || '').trim()
-  if (!normalized) return getRandomTagColor(fallbackIndex)
+  if (!normalized) return TAG_COLORS[0]
 
   let hash = 0
   for (let i = 0; i < normalized.length; i += 1) {
@@ -56,6 +57,11 @@ export async function updateTaskStatus(taskId: string, completed: boolean): Prom
 
 export async function deletePlan(planId: string): Promise<boolean> {
   const result = await callHttpFunction('deletePlan', { planId })
+  return !!result.success
+}
+
+export async function updatePlan(data: UpdatePlanRequest): Promise<boolean> {
+  const result = await callHttpFunction('updatePlan', data as unknown as Record<string, unknown>)
   return !!result.success
 }
 
@@ -128,4 +134,34 @@ export async function suggestAiCompletion(data: Record<string, unknown>): Promis
     }
     return result
   }
+}
+
+export async function generateSubtasks(taskId: string): Promise<SubTask[]> {
+  const result = await callHttpFunction('generateSubtasks', { taskId })
+  return result.subtasks || []
+}
+
+export async function createSubtask(taskId: string, planId: string, title: string): Promise<SubTask> {
+  const result = await callHttpFunction('createSubtask', { taskId, planId, title })
+  return result.subtask
+}
+
+export async function updateSubtask(subtaskId: string, title: string): Promise<boolean> {
+  const result = await callHttpFunction('updateSubtask', { subtaskId, title })
+  return !!result.success
+}
+
+export async function deleteSubtask(subtaskId: string): Promise<boolean> {
+  const result = await callHttpFunction('deleteSubtask', { subtaskId })
+  return !!result.success
+}
+
+export async function updateSubtaskStatus(subtaskId: string, completed: boolean): Promise<boolean> {
+  const result = await callHttpFunction('updateSubtaskStatus', { subtaskId, completed })
+  return !!result.success
+}
+
+export async function getSubtasks(taskId: string): Promise<SubTask[]> {
+  const result = await callHttpFunction('getSubtasks', { taskId })
+  return result.subtasks || []
 }

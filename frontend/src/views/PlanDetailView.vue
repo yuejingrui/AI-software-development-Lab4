@@ -4,16 +4,160 @@
     <header class="detail-header">
       <div class="header-top">
         <button class="btn-back" @click="$router.push('/')">&larr; 返回工作台</button>
-        <button class="btn-delete" @click="showDeleteConfirm = true">删除计划</button>
+        <div class="header-actions">
+          <button v-if="!editingPlan" class="btn-edit" @click="startEditPlan">编辑计划</button>
+          <button class="btn-delete" @click="showDeleteConfirm = true">删除计划</button>
+        </div>
       </div>
-      <div v-if="plan" class="plan-info">
+
+      <!-- 计划信息展示模式 -->
+      <div v-if="plan && !editingPlan" class="plan-info">
         <h2>{{ plan.plan.topic }}</h2>
         <div class="plan-meta">
           <TagChip v-for="tag in plan.plan.tags" :key="tag.name" :name="tag.name" :color="tag.color" />
           <span class="date-range">{{ plan.plan.startDate }} ~ {{ plan.plan.endDate }}</span>
           <span class="status-badge">{{ statusText }}</span>
         </div>
-        <div v-if="plan.plan.description" class="plan-desc">{{ plan.plan.description }}</div>
+
+        <!-- 全部字段展示 -->
+        <div class="plan-fields">
+          <div v-if="plan.plan.description" class="plan-field">
+            <span class="field-label">描述</span>
+            <span class="field-value">{{ plan.plan.description }}</span>
+          </div>
+
+          <div class="plan-field-row">
+            <div class="plan-field">
+              <span class="field-label">每日时长</span>
+              <span class="field-value">{{ plan.plan.dailyMinutes || '未设置' }} 分钟</span>
+            </div>
+            <div class="plan-field">
+              <span class="field-label">计划天数</span>
+              <span class="field-value">{{ plan.plan.durationDays }} 天</span>
+            </div>
+          </div>
+
+          <div v-if="plan.plan.references && plan.plan.references.length > 0" class="plan-field">
+            <span class="field-label">参考资料与平台</span>
+            <span class="field-value">{{ plan.plan.references.join('、') }}</span>
+          </div>
+
+          <div class="plan-field">
+            <span class="field-label">用户身份</span>
+            <span class="field-value">
+              {{ plan.plan.userProfile.type }}
+              <template v-if="plan.plan.userProfile.type === '其他' && plan.plan.userProfile.customText">
+                ({{ plan.plan.userProfile.customText }})
+              </template>
+            </span>
+          </div>
+
+          <div v-if="plan.plan.expectedOutcome" class="plan-field">
+            <span class="field-label">预期成果</span>
+            <span class="field-value">{{ plan.plan.expectedOutcome }}</span>
+          </div>
+
+          <div v-if="plan.plan.notes" class="plan-field">
+            <span class="field-label">备注</span>
+            <span class="field-value">{{ plan.plan.notes }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 计划信息编辑模式 -->
+      <div v-if="plan && editingPlan" class="plan-edit-form">
+        <h3>编辑计划信息</h3>
+
+        <div class="form-group">
+          <label class="required">目标 / 学习内容</label>
+          <input v-model="editPlanForm.topic" maxlength="100" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="required">开始日期</label>
+            <input type="date" v-model="editPlanForm.startDate" />
+          </div>
+          <div class="form-group">
+            <label class="required">结束日期</label>
+            <input type="date" v-model="editPlanForm.endDate" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>每日可用时长（分钟）<span class="optional">选填</span></label>
+          <input type="number" v-model.number="editPlanForm.dailyMinutes" min="1" />
+        </div>
+
+        <div class="form-group">
+          <label>描述 / 补充说明<span class="optional">选填</span></label>
+          <textarea v-model="editPlanForm.description" maxlength="500" rows="2"></textarea>
+          <span class="char-count">{{ editPlanForm.description.length }}/500</span>
+        </div>
+
+        <div class="form-group">
+          <label>参考资料与平台<span class="optional">选填</span></label>
+          <input v-model="editPlanForm.referencesStr" placeholder="例如：B站 + 官方文档 + LeetCode" />
+        </div>
+
+        <div class="form-group">
+          <label class="required">用户身份</label>
+          <div class="profile-options">
+            <label
+              v-for="preset in profilePresets"
+              :key="preset"
+              class="radio-label"
+            >
+              <input type="radio" v-model="editPlanForm.userProfileType" :value="preset" />
+              {{ preset }}
+            </label>
+          </div>
+          <input
+            v-if="editPlanForm.userProfileType === '其他'"
+            v-model="editPlanForm.userProfileCustom"
+            class="custom-profile-input"
+            placeholder="请填写，10字以下"
+            maxlength="10"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>预期学习成果 / 程度<span class="optional">选填</span></label>
+          <input v-model="editPlanForm.expectedOutcome" maxlength="200" />
+        </div>
+
+        <div class="form-group">
+          <label>主题标签<span class="optional">选填，10字以内</span></label>
+          <div class="tags-input-area">
+            <div v-for="(tag, idx) in editPlanForm.tags" :key="idx" class="tag-item">
+              <span class="tag-dot" :style="{ backgroundColor: tag.color }"></span>
+              <span>{{ tag.name }}</span>
+              <button class="tag-remove" @click="removeEditTag(idx)">&times;</button>
+            </div>
+            <input
+              v-if="editPlanForm.tags.length < 5"
+              v-model="editTagInput"
+              class="tag-input-inline"
+              placeholder="输入标签后回车"
+              maxlength="10"
+              @keydown.enter.prevent="addEditTag"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>备注<span class="optional">选填</span></label>
+          <textarea v-model="editPlanForm.notes" maxlength="500" rows="2"></textarea>
+        </div>
+
+        <div v-if="editPlanError" class="error-msg">{{ editPlanError }}</div>
+
+        <div class="edit-plan-actions">
+          <button class="btn-cancel" @click="cancelEditPlan">取消</button>
+          <button class="btn-primary" @click="saveEditPlan" :disabled="savingPlan">
+            {{ savingPlan ? '保存中...' : '保存修改' }}
+          </button>
+        </div>
       </div>
     </header>
 
@@ -131,18 +275,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, nextTick, computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TagChip from '@/components/TagChip.vue'
-import type { PlanDetail, PlanChatMessage } from '@/types'
+import { USER_PROFILE_PRESETS } from '@/types'
+import type { PlanDetail, PlanChatMessage, TagView, UserProfile, UpdatePlanRequest } from '@/types'
 import {
   getPlanDetail, updateTaskStatus, updateTaskInfo,
-  refinePlan, saveChatMessage, deletePlan
+  refinePlan, saveChatMessage, deletePlan, updatePlan,
+  getTagColor
 } from '@/services/data'
 
 const route = useRoute()
 const router = useRouter()
 const planId = computed(() => route.params.planId as string)
+const profilePresets = USER_PROFILE_PRESETS
 
 const toast = ref<{ message: string; type: 'success' | 'error' } | null>(null)
 
@@ -158,6 +305,40 @@ const detailStatusFilter = ref<'all' | 'completed' | 'pending'>('all')
 
 const editingTaskId = ref<string | null>(null)
 const editForm = ref({ title: '', description: '', estimatedMinutes: 90, date: '', priority: 'medium' })
+
+// --- 计划编辑状态 ---
+const editingPlan = ref(false)
+const savingPlan = ref(false)
+const editPlanError = ref('')
+const editTagInput = ref('')
+
+interface EditPlanForm {
+  topic: string
+  startDate: string
+  endDate: string
+  dailyMinutes: number | null
+  description: string
+  referencesStr: string
+  userProfileType: string
+  userProfileCustom: string
+  expectedOutcome: string
+  tags: TagView[]
+  notes: string
+}
+
+const editPlanForm = reactive<EditPlanForm>({
+  topic: '',
+  startDate: '',
+  endDate: '',
+  dailyMinutes: null,
+  description: '',
+  referencesStr: '',
+  userProfileType: '零基础初学者',
+  userProfileCustom: '',
+  expectedOutcome: '',
+  tags: [],
+  notes: ''
+})
 
 const completedCount = computed(() => plan.value ? plan.value.tasks.filter((t: { completed: boolean }) => t.completed).length : 0)
 const detailTagOptions = computed(() => {
@@ -272,6 +453,108 @@ async function handleDelete() {
   }
 }
 
+// --- 计划编辑功能 ---
+
+function startEditPlan() {
+  if (!plan.value) return
+  const p = plan.value.plan
+  editPlanForm.topic = p.topic
+  editPlanForm.startDate = p.startDate
+  editPlanForm.endDate = p.endDate
+  editPlanForm.dailyMinutes = p.dailyMinutes
+  editPlanForm.description = p.description || ''
+  editPlanForm.referencesStr = [...(p.references || []), ...(p.platforms || [])].filter((v, i, a) => a.indexOf(v) === i).join('、')
+  editPlanForm.userProfileType = p.userProfile.type
+  editPlanForm.userProfileCustom = p.userProfile.customText || ''
+  editPlanForm.expectedOutcome = p.expectedOutcome || ''
+  editPlanForm.tags = [...(p.tags || [])]
+  editPlanForm.notes = p.notes || ''
+  editPlanError.value = ''
+  editTagInput.value = ''
+  editingPlan.value = true
+}
+
+function cancelEditPlan() {
+  editingPlan.value = false
+  editPlanError.value = ''
+}
+
+function addEditTag() {
+  const name = editTagInput.value.trim()
+  if (!name || name.length > 10) return
+  if (editPlanForm.tags.some(t => t.name === name)) return
+  editPlanForm.tags.push({
+    name,
+    color: getTagColor(name)
+  })
+  editTagInput.value = ''
+}
+
+function removeEditTag(idx: number) {
+  editPlanForm.tags.splice(idx, 1)
+}
+
+function validateEditPlan(): string | null {
+  if (!editPlanForm.topic.trim()) return '请输入目标或学习内容'
+  if (!editPlanForm.startDate) return '请选择开始日期'
+  if (!editPlanForm.endDate) return '请选择结束日期'
+  if (editPlanForm.startDate > editPlanForm.endDate) return '结束日期不能早于开始日期'
+  if (editPlanForm.dailyMinutes !== null && (editPlanForm.dailyMinutes <= 0 || !Number.isInteger(editPlanForm.dailyMinutes))) return '每日可用时长必须为正整数'
+  if (editPlanForm.description.length > 500) return '描述不能超过500字'
+  if (editPlanForm.notes.length > 500) return '备注不能超过500字'
+  if (!editPlanForm.userProfileType) return '请选择用户身份'
+  if (editPlanForm.userProfileType === '其他' && !editPlanForm.userProfileCustom.trim()) return '请填写自定义用户身份'
+  if (editPlanForm.userProfileType === '其他' && editPlanForm.userProfileCustom.trim().length > 10) return '自定义用户身份需在10字以下'
+  return null
+}
+
+async function saveEditPlan() {
+  editPlanError.value = ''
+  const err = validateEditPlan()
+  if (err) {
+    editPlanError.value = err
+    return
+  }
+
+  savingPlan.value = true
+  try {
+    const userProfile: UserProfile = {
+      type: editPlanForm.userProfileType,
+      customText: editPlanForm.userProfileType === '其他' ? editPlanForm.userProfileCustom.trim() : ''
+    }
+    const references = editPlanForm.referencesStr
+      ? editPlanForm.referencesStr.split(/[+、,，]/).map(s => s.trim()).filter(Boolean)
+      : []
+
+    const data: UpdatePlanRequest = {
+      planId: planId.value,
+      topic: editPlanForm.topic.trim(),
+      objective: editPlanForm.topic.trim(),
+      startDate: editPlanForm.startDate,
+      endDate: editPlanForm.endDate,
+      dailyMinutes: editPlanForm.dailyMinutes,
+      description: editPlanForm.description.trim(),
+      references,
+      platforms: references,
+      userProfile,
+      expectedOutcome: editPlanForm.expectedOutcome.trim(),
+      tags: [...editPlanForm.tags],
+      notes: editPlanForm.notes.trim()
+    }
+
+    await updatePlan(data)
+    editingPlan.value = false
+    await loadPlan()
+    toast.value = { message: '计划信息已更新', type: 'success' }
+    setTimeout(() => { toast.value = null }, 3000)
+  } catch {
+    toast.value = { message: '保存失败，请重试', type: 'error' }
+    setTimeout(() => { toast.value = null }, 3000)
+  } finally {
+    savingPlan.value = false
+  }
+}
+
 async function sendChatMessage() {
   const msg = chatInput.value.trim()
   if (!msg || chatLoading.value) return
@@ -316,6 +599,12 @@ onMounted(() => {
   background: none; border: none; color: #4F46E5; cursor: pointer;
   font-size: 14px; padding: 4px 0;
 }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.btn-edit {
+  background: none; border: 1px solid #4F46E5; color: #4F46E5;
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.btn-edit:hover { background: #EEF2FF; }
 .btn-delete {
   background: none; border: 1px solid #FCA5A5; color: #EF4444;
   padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
@@ -335,11 +624,82 @@ onMounted(() => {
 .btn-cancel { padding: 6px 16px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; }
 .btn-confirm-delete { padding: 6px 16px; border: none; border-radius: 6px; background: #EF4444; color: #fff; cursor: pointer; font-size: 14px; }
 .btn-confirm-delete:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* 计划信息展示 */
 .plan-info h2 { font-size: 20px; margin: 0 0 6px; }
-.plan-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.plan-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .date-range { font-size: 13px; color: #6B7280; }
 .status-badge { font-size: 12px; padding: 1px 8px; border-radius: 4px; background: #EEF2FF; color: #4F46E5; }
-.plan-desc { font-size: 13px; color: #6B7280; margin-top: 4px; }
+
+.plan-fields {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: #F9FAFB;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+.plan-field {
+  margin-bottom: 8px;
+}
+.plan-field:last-child { margin-bottom: 0; }
+.field-label {
+  font-size: 12px;
+  color: #9CA3AF;
+  display: block;
+  margin-bottom: 1px;
+}
+.field-value {
+  font-size: 14px;
+  color: #374151;
+}
+.plan-field-row {
+  display: flex;
+  gap: 24px;
+}
+.plan-field-row .plan-field {
+  margin-bottom: 8px;
+}
+
+/* 计划编辑表单 */
+.plan-edit-form {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.plan-edit-form h3 {
+  font-size: 16px;
+  margin: 0 0 12px;
+  color: #4F46E5;
+}
+.form-group { margin-bottom: 10px; }
+.form-group label { display: block; font-size: 13px; color: #333; margin-bottom: 4px; font-weight: 500; }
+.form-group label.required::after { content: ' *'; color: #EF4444; }
+.optional { color: #999; font-weight: 400; font-size: 11px; }
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 14px; box-sizing: border-box; font-family: inherit;
+}
+.form-group input:focus, .form-group textarea:focus { outline: none; border-color: #4F46E5; }
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+.char-count { font-size: 11px; color: #999; float: right; }
+.profile-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.radio-label { font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.custom-profile-input { margin-top: 4px; }
+.tags-input-area { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; min-height: 36px; }
+.tag-item { display: flex; align-items: center; gap: 4px; background: #f3f4f6; border-radius: 4px; padding: 2px 6px; font-size: 12px; }
+.tag-dot { width: 8px; height: 8px; border-radius: 50%; }
+.tag-remove { background: none; border: none; cursor: pointer; color: #999; font-size: 14px; line-height: 1; padding: 0; }
+.tag-input-inline { border: none !important; flex: 1; min-width: 100px; padding: 2px !important; font-size: 12px !important; outline: none; }
+.error-msg { color: #EF4444; font-size: 13px; margin-top: 8px; }
+.edit-plan-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.btn-primary { padding: 8px 20px; border: none; border-radius: 6px; background: #4F46E5; color: #fff; cursor: pointer; font-size: 14px; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .loading { text-align: center; padding: 40px; color: #9CA3AF; }
 .detail-body { display: flex; gap: 16px; flex: 1; min-height: 0; }
 .tasks-section { flex: 1; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; overflow-y: auto; background: #fff; }
