@@ -9,11 +9,23 @@ import type {
   CreatePlanRequest, CreatePlanResponse
 } from '@/types'
 
-export const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E']
+export const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#14B8A6', '#EAB308', '#6366F1', '#EF4444']
 
 
 export function getRandomTagColor(index: number): string {
   return TAG_COLORS[index % TAG_COLORS.length]
+}
+
+export function getTagColor(name: string, fallbackIndex = 0): string {
+  const normalized = String(name || '').trim()
+  if (!normalized) return getRandomTagColor(fallbackIndex)
+
+  let hash = 0
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
+  }
+
+  return TAG_COLORS[hash % TAG_COLORS.length]
 }
 
 export async function createPlan(data: CreatePlanRequest): Promise<CreatePlanResponse> {

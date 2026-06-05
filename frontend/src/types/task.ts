@@ -10,6 +10,8 @@ export interface StudyTask {
   estimatedMinutes: number
   priority: 'low' | 'medium' | 'high'
   tags: TagView[]
+  taskNumber?: string
+  taskGroupKey?: string
   completed: boolean
   editSource: 'ai_generated' | 'user_manual' | 'ai_refined'
   adjustmentNote: string
@@ -42,6 +44,8 @@ export interface DayTaskView {
   completed: boolean
   priority: 'low' | 'medium' | 'high'
   tags: TagView[]
+  taskNumber?: string
+  taskGroupKey?: string
   editSource: string
 }
 

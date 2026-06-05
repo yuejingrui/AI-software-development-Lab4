@@ -74,7 +74,7 @@
 
         <!-- 主题标签 (选填) -->
         <div class="form-group">
-          <label>主题标签<span class="optional">选填，10字以内</span></label>
+          <label>主题标签<span class="optional">选填，10字以内；留空则自动生成</span></label>
           <div class="tags-input-area">
             <div v-for="(tag, idx) in form.tags" :key="idx" class="tag-item">
               <span class="tag-dot" :style="{ backgroundColor: tag.color }"></span>
@@ -140,16 +140,13 @@
 import { ref, reactive } from 'vue'
 import { USER_PROFILE_PRESETS } from '@/types'
 import type { TagView, UserProfile, CreatePlanRequest } from '@/types'
-import { getRandomTagColor } from '@/services/data'
-import { suggestAiCompletion } from '@/services/data'
+import { getTagColor, suggestAiCompletion } from '@/services/data'
 
 const props = defineProps<{ visible: boolean; submitting: boolean }>()
 const emit = defineEmits<{
   close: []
   submit: [data: CreatePlanRequest]
 }>()
-
-const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E']
 
 const profilePresets = USER_PROFILE_PRESETS
 
@@ -177,7 +174,7 @@ function addTag() {
   if (form.tags.some(t => t.name === name)) return
   form.tags.push({
     name,
-    color: TAG_COLORS[form.tags.length % TAG_COLORS.length]
+    color: getTagColor(name, form.tags.length)
   })
   tagInput.value = ''
 }

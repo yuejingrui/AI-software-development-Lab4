@@ -4,6 +4,7 @@ import type { PlanChatMessage } from './chat'
 export interface TagView {
   name: string
   color: string
+  source?: 'user' | 'ai'
 }
 
 export interface UserProfile {

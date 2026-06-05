@@ -38,11 +38,23 @@
       <!-- 左侧：任务列表 -->
       <div class="tasks-section">
         <div class="section-header">
-          <h3>学习任务 ({{ plan.tasks.length }})</h3>
+          <h3>学习任务 ({{ filteredTasks.length }}/{{ plan.tasks.length }})</h3>
           <span class="task-progress">{{ completedCount }}/{{ plan.tasks.length }} 已完成</span>
         </div>
+        <div class="task-filters">
+          <select v-model="detailTagFilter" class="filter-select">
+            <option value="all">全部标签</option>
+            <option v-for="tag in detailTagOptions" :key="tag" :value="tag">{{ tag }}</option>
+          </select>
+          <select v-model="detailStatusFilter" class="filter-select">
+            <option value="all">全部状态</option>
+            <option value="completed">已完成</option>
+            <option value="pending">未完成</option>
+          </select>
+          <span class="filter-hint">同名且标签相同的任务按整体完成度筛选</span>
+        </div>
         <div class="task-list">
-          <div v-for="task in plan.tasks" :key="task._id" class="task-card">
+          <div v-for="task in filteredTasks" :key="task._id" class="task-card">
             <div class="task-card-header">
               <input type="checkbox" :checked="task.completed" @change="handleToggle(task._id, !task.completed)" />
               <div class="task-card-info">
@@ -64,11 +76,17 @@
                   </div>
                 </div>
                 <template v-else>
-                  <div class="task-card-title">{{ task.title }}</div>
+                  <div class="task-card-title-row">
+                    <div class="task-card-title">{{ task.title }}</div>
+                    <span v-if="task.taskNumber" class="task-number">{{ task.taskNumber }}</span>
+                  </div>
                   <div class="task-card-meta">
                     <span>{{ task.date }}</span>
                     <span>{{ task.estimatedMinutes }}分钟</span>
                     <span :class="'priority-' + task.priority">{{ priorityLabel(task.priority) }}</span>
+                  </div>
+                  <div class="task-card-tags">
+                    <TagChip v-for="tag in task.tags" :key="tag.name" :name="tag.name" :color="tag.color" />
                   </div>
                   <div v-if="task.description" class="task-card-desc">{{ task.description }}</div>
                   <button class="btn-edit-inline" @click="startEdit(task)">编辑</button>
@@ -135,11 +153,48 @@ const chatLoading = ref(false)
 const chatContainer = ref<HTMLElement | null>(null)
 const showDeleteConfirm = ref(false)
 const deleting = ref(false)
+const detailTagFilter = ref('all')
+const detailStatusFilter = ref<'all' | 'completed' | 'pending'>('all')
 
 const editingTaskId = ref<string | null>(null)
 const editForm = ref({ title: '', description: '', estimatedMinutes: 90, date: '', priority: 'medium' })
 
 const completedCount = computed(() => plan.value ? plan.value.tasks.filter((t: { completed: boolean }) => t.completed).length : 0)
+const detailTagOptions = computed(() => {
+  if (!plan.value) return []
+  return Array.from(new Set(plan.value.tasks.flatMap(task => task.tags.map(tag => tag.name)))).sort((a, b) => a.localeCompare(b))
+})
+
+const taskGroupCompletion = computed(() => {
+  const map = new Map<string, boolean>()
+  if (!plan.value) return map
+
+  const grouped = new Map<string, { allCompleted: boolean }>()
+  for (const task of plan.value.tasks) {
+    const key = task.taskGroupKey || task.title
+    const current = grouped.get(key)
+    if (!current) {
+      grouped.set(key, { allCompleted: task.completed })
+      continue
+    }
+    current.allCompleted = current.allCompleted && task.completed
+  }
+
+  grouped.forEach((value, key) => map.set(key, value.allCompleted))
+  return map
+})
+
+const filteredTasks = computed(() => {
+  if (!plan.value) return []
+  return plan.value.tasks.filter((task) => {
+    const matchesTag = detailTagFilter.value === 'all' || task.tags.some(tag => tag.name === detailTagFilter.value)
+    const groupCompleted = taskGroupCompletion.value.get(task.taskGroupKey || task.title) ?? task.completed
+    const matchesStatus = detailStatusFilter.value === 'all'
+      || (detailStatusFilter.value === 'completed' && groupCompleted)
+      || (detailStatusFilter.value === 'pending' && !groupCompleted)
+    return matchesTag && matchesStatus
+  })
+})
 
 const statusText = computed(() => {
   if (!plan.value) return ''
@@ -159,6 +214,9 @@ async function loadPlan() {
   if (detail) {
     plan.value = detail
     chatMessages.value = detail.chatMessages
+    if (detailTagFilter.value !== 'all' && !detail.tasks.some(task => task.tags.some(tag => tag.name === detailTagFilter.value))) {
+      detailTagFilter.value = 'all'
+    }
   }
 }
 
@@ -288,14 +346,26 @@ onMounted(() => {
 .chat-section { width: 340px; min-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; display: flex; flex-direction: column; background: #fff; }
 .section-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
 .section-header h3 { font-size: 14px; margin: 0; }
+.task-filters {
+  display: flex; gap: 8px; align-items: center; padding: 12px 16px 0;
+  flex-wrap: wrap;
+}
+.filter-select {
+  min-width: 120px; padding: 6px 8px; border: 1px solid #d1d5db;
+  border-radius: 6px; font-size: 12px; background: #fff;
+}
+.filter-hint { font-size: 12px; color: #6B7280; }
 .task-progress { font-size: 12px; color: #6B7280; }
 .task-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
 .task-card { padding: 10px; border-bottom: 1px solid #f3f4f6; }
 .task-card-header { display: flex; gap: 10px; align-items: flex-start; }
 .task-card-header input[type="checkbox"] { margin-top: 2px; }
 .task-card-info { flex: 1; min-width: 0; }
+.task-card-title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .task-card-title { font-size: 14px; font-weight: 500; }
+.task-number { font-size: 11px; color: #9CA3AF; white-space: nowrap; }
 .task-card-meta { display: flex; gap: 8px; font-size: 12px; color: #9CA3AF; margin-top: 2px; }
+.task-card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .priority-high { color: #EF4444; }
 .priority-medium { color: #F59E0B; }
 .priority-low { color: #6B7280; }

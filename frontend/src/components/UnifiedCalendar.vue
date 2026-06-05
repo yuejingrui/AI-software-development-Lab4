@@ -35,12 +35,12 @@
           </div>
           <div class="tag-dots">
             <span
-              v-for="(tag, ti) in cell.tags.slice(0, 3)"
+              v-for="(tag, ti) in visibleTags(cell.tags)"
               :key="ti"
               class="tag-dot"
               :style="{ backgroundColor: tag.color }"
             ></span>
-            <span v-if="cell.tags.length > 3" class="tag-more">+{{ cell.tags.length - 3 }}</span>
+            <span v-if="cell.tags.length > MAX_VISIBLE_TAGS" class="tag-more">+{{ cell.tags.length - MAX_VISIBLE_TAGS }}</span>
           </div>
         </div>
       </div>
@@ -65,6 +65,7 @@ const emit = defineEmits<{
 }>()
 
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+const MAX_VISIBLE_TAGS = 8
 
 interface CalendarCell {
   date: string | null
@@ -160,6 +161,10 @@ function nextMonth() {
   if (m > 11) { m = 0; y++ }
   emit('changeMonth', y, m)
 }
+
+function visibleTags(tags: TagView[]): TagView[] {
+  return tags.length < 9 ? tags : tags.slice(0, MAX_VISIBLE_TAGS)
+}
 </script>
 
 <style scoped>
@@ -194,7 +199,7 @@ function nextMonth() {
 .day-info { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 1px; }
 .task-progress { font-size: 9px; color: #4F46E5; font-weight: 600; }
 .task-count { font-size: 9px; color: #6B7280; }
-.tag-dots { display: flex; gap: 2px; align-items: center; margin-top: 1px; }
+.tag-dots { display: flex; gap: 2px; align-items: center; justify-content: center; margin-top: 1px; flex-wrap: wrap; max-width: 100%; }
 .tag-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
 .tag-more { font-size: 8px; color: #9CA3AF; }
 </style>

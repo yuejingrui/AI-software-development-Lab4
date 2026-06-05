@@ -1,9 +1,31 @@
 import type { PlanSummary, PlanDetail, StudyTask, PlanChatMessage, CalendarDaySummary, DayTaskView, TagView } from '@/types'
 
-const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E']
+const TAG_COLORS = ['#3B82F6', '#22C55E', '#F97316', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#14B8A6', '#EAB308', '#6366F1', '#EF4444']
 
 export function getRandomTagColor(index: number): string {
   return TAG_COLORS[index % TAG_COLORS.length]
+}
+
+function getTagColor(name: string, fallbackIndex = 0): string {
+  const normalized = String(name || '').trim()
+  if (!normalized) return getRandomTagColor(fallbackIndex)
+
+  let hash = 0
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
+  }
+
+  return TAG_COLORS[hash % TAG_COLORS.length]
+}
+
+function buildAutoTags(data: { userProfile?: { type: string; customText: string } }): TagView[] {
+  const profile = data.userProfile?.type === '其他' ? data.userProfile.customText : data.userProfile?.type
+  const names = ['学习计划', profile || '重点学习', 'AI生成']
+  return Array.from(new Set(names.filter(Boolean))).slice(0, 3).map((name, index) => ({
+    name,
+    color: getTagColor(name, index),
+    source: 'ai'
+  }))
 }
 
 // Helper to generate dates
@@ -68,11 +90,11 @@ function generateTasks(planId: string, topic: string, startDate: string, days: n
   const tasks: StudyTask[] = []
   const start = new Date(startDate)
   const sampleTasks = [
-    { title: '了解核心概念与背景', description: '阅读入门材料，建立整体认知框架' },
-    { title: '学习基础理论知识', description: '掌握核心理论要点并做笔记' },
-    { title: '动手实践练习', description: '完成配套练习题，巩固理解' },
-    { title: '深入案例学习', description: '通过案例加深对知识点的理解' },
-    { title: '复习与总结', description: '回顾本周所学内容，整理知识图谱' },
+    { title: '了解核心概念与背景', description: '阅读入门材料，建立整体认知框架', tag: '入门' },
+    { title: '学习基础理论知识', description: '掌握核心理论要点并做笔记', tag: '理论' },
+    { title: '动手实践练习', description: '完成配套练习题，巩固理解', tag: '实战' },
+    { title: '深入案例学习', description: '通过案例加深对知识点的理解', tag: '案例' },
+    { title: '复习与总结', description: '回顾本周所学内容，整理知识图谱', tag: '复习' },
   ]
 
   for (let i = 0; i < days; i++) {
@@ -87,7 +109,9 @@ function generateTasks(planId: string, topic: string, startDate: string, days: n
       description: sampleTasks[sampleIdx].description,
       estimatedMinutes: 90,
       priority: 'medium',
-      tags,
+      tags: [{ name: sampleTasks[sampleIdx].tag, color: getTagColor(sampleTasks[sampleIdx].tag) }],
+      taskNumber: `T-${String(i + 1).padStart(4, '0')}`,
+      taskGroupKey: `${sampleTasks[sampleIdx].title}::${sampleTasks[sampleIdx].tag}`,
       completed: false,
       editSource: 'ai_generated',
       adjustmentNote: '',
@@ -104,7 +128,7 @@ export function mockCreatePlan(data: { topic: string; objective: string; startDa
   const end = new Date(data.endDate)
   const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
 
-  const tags = (data.tags && data.tags.length > 0) ? data.tags : [{ name: data.topic, color: getRandomTagColor(nextPlanId) }]
+  const tags = (data.tags && data.tags.length > 0) ? data.tags : buildAutoTags(data)
   const tasks = generateTasks(planId, data.topic, data.startDate, days, tags)
 
   const plan = {
@@ -215,6 +239,8 @@ export function mockGetTasksByDate(date: string): DayTaskView[] {
           completed: task.completed,
           priority: task.priority,
           tags: task.tags,
+          taskNumber: task.taskNumber,
+          taskGroupKey: task.taskGroupKey,
           editSource: task.editSource
         })
       }

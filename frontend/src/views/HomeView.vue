@@ -13,7 +13,12 @@
         <DayTaskPanel
           :date="selectedDate"
           :tasks="currentDayTasks"
+          :availableTags="dayTaskTagOptions"
+          :selectedTag="dayTagFilter"
+          :selectedStatus="dayStatusFilter"
           :togglingTaskId="togglingTaskId"
+          @update:selectedTag="dayTagFilter = $event"
+          @update:selectedStatus="dayStatusFilter = $event"
           @toggleTask="handleToggleTask"
         />
       </aside>
@@ -70,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import UnifiedCalendar from '@/components/UnifiedCalendar.vue'
 import DayTaskPanel from '@/components/DayTaskPanel.vue'
@@ -104,6 +109,8 @@ const calendarDays = ref<CalendarDaySummary[]>([])
 const currentDayTasks = ref<DayTaskView[]>([])
 const selectedDate = ref(formatLocalDate(new Date()))
 const togglingTaskId = ref<string | null>(null)
+const dayTagFilter = ref('all')
+const dayStatusFilter = ref<'all' | 'completed' | 'pending'>('all')
 const showDeleteConfirm = ref(false)
 const deletingPlanId = ref('')
 const deletingPlanTopic = ref('')
@@ -112,6 +119,14 @@ const deleting = ref(false)
 const now = new Date()
 const currentYear = ref(now.getFullYear())
 const currentMonth = ref(now.getMonth())
+
+const dayTaskTagOptions = computed(() => {
+  return Array.from(
+    new Set(
+      currentDayTasks.value.flatMap(task => task.tags.map(tag => tag.name))
+    )
+  ).sort((a, b) => a.localeCompare(b))
+})
 
 function getMonthRange(year: number, month: number): { start: string; end: string } {
   const start = new Date(year, month, 1)
@@ -140,6 +155,9 @@ async function loadAll() {
 async function loadDayTasks() {
   try {
     currentDayTasks.value = await getTasksByDate(selectedDate.value)
+    if (dayTagFilter.value !== 'all' && !currentDayTasks.value.some(task => task.tags.some(tag => tag.name === dayTagFilter.value))) {
+      dayTagFilter.value = 'all'
+    }
   } catch (e) {
     console.warn('加载日任务失败:', e)
   }
