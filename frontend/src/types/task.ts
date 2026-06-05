@@ -53,6 +53,7 @@ export interface CalendarDaySummary {
   date: string
   totalTasks: number
   completedTasks: number
+  totalMinutes: number
   tags: TagView[]
   isSelected?: boolean
 }

@@ -37,6 +37,24 @@
     </div>
 
     <!-- 底部：计划概览 -->
+    <section class="stats-panel">
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.totalPlans }}</span>
+        <span class="stat-label">个计划</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.totalDays }}</span>
+        <span class="stat-label">天</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.totalHours }}</span>
+        <span class="stat-label">小时</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.completionRate }}%</span>
+        <span class="stat-label">完成</span>
+      </div>
+    </section>
     <footer class="bottom-panel">
       <PlanSummaryList
         :plans="planSummaries"
@@ -126,6 +144,30 @@ const dayTaskTagOptions = computed(() => {
       currentDayTasks.value.flatMap(task => task.tags.map(tag => tag.name))
     )
   ).sort((a, b) => a.localeCompare(b))
+})
+
+const stats = computed(() => {
+  const totalPlans = planSummaries.value.length
+  const totalTasks = planSummaries.value.reduce((sum, p) => sum + p.totalTasks, 0)
+  const completedTasks = planSummaries.value.reduce((sum, p) => sum + p.completedTasks, 0)
+
+  // Use calendarDays for date-level aggregation
+  const allDates = new Set<string>()
+  let totalMinutes = 0
+  for (const day of calendarDays.value) {
+    allDates.add(day.date)
+    totalMinutes += day.totalMinutes || 0
+  }
+
+  const totalDays = allDates.size
+  const totalHours = totalMinutes > 0
+    ? parseFloat((totalMinutes / 60).toFixed(1))
+    : 0
+  const completionRate = totalTasks > 0
+    ? Math.round((completedTasks / totalTasks) * 100)
+    : 0
+
+  return { totalPlans, totalDays, totalHours, completionRate }
 })
 
 function getMonthRange(year: number, month: number): { start: string; end: string } {
@@ -293,6 +335,14 @@ onMounted(async () => {
   flex: 1; border: 1px solid #e5e7eb; border-radius: 10px;
   padding: 6px; background: #fff; overflow: hidden;
 }
+.stats-panel {
+  display: flex; justify-content: center; gap: 18px; margin-top: 6px;
+  padding: 8px 14px; background: #F9FAFB; border: 1px solid #e5e7eb;
+  border-radius: 10px; flex-shrink: 0;
+}
+.stat-item { display: flex; align-items: baseline; gap: 3px; }
+.stat-value { font-size: 17px; font-weight: 700; color: #4F46E5; }
+.stat-label { font-size: 11px; color: #6B7280; }
 .bottom-panel {
   margin-top: 6px; border: 1px solid #e5e7eb;
   border-radius: 10px; background: #fff; overflow-y: auto; flex-shrink: 0;

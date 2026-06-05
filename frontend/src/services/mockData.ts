@@ -6,26 +6,52 @@ export function getRandomTagColor(index: number): string {
   return TAG_COLORS[index % TAG_COLORS.length]
 }
 
-function getTagColor(name: string, fallbackIndex = 0): string {
+function getTagColor(name: string): string {
   const normalized = String(name || '').trim()
-  if (!normalized) return getRandomTagColor(fallbackIndex)
-
+  if (!normalized) return TAG_COLORS[0]
   let hash = 0
   for (let i = 0; i < normalized.length; i += 1) {
     hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
   }
-
   return TAG_COLORS[hash % TAG_COLORS.length]
 }
 
-function buildAutoTags(data: { userProfile?: { type: string; customText: string } }): TagView[] {
-  const profile = data.userProfile?.type === '其他' ? data.userProfile.customText : data.userProfile?.type
-  const names = ['学习计划', profile || '重点学习', 'AI生成']
-  return Array.from(new Set(names.filter(Boolean))).slice(0, 3).map((name, index) => ({
-    name,
-    color: getTagColor(name, index),
-    source: 'ai'
-  }))
+const SUBJECT_KEYWORDS: [RegExp, string][] = [
+  [/机器学习|深度学习|神经网络|强化学习|自然语言处理|计算机视觉/, '机器学习'],
+  [/前端|Vue|React|HTML|CSS|JavaScript|TypeScript|Webpack|Vite/, '前端开发'],
+  [/后端|Node\.?js|API|数据库|MySQL|Redis|MongoDB|SQL/, '后端开发'],
+  [/算法|数据结构|LeetCode|竞赛|ACM/, '算法'],
+  [/数学|高数|线代|概率|统计|微积分/, '数学'],
+  [/英语|外语|雅思|托福|四六级|词汇|语法/, '英语'],
+  [/编程|Python|Java|C\+\+|Go|Rust|开发|代码/, '编程'],
+]
+
+function inferSubject(topic: string): string {
+  for (const [pattern, name] of SUBJECT_KEYWORDS) {
+    if (pattern.test(topic)) return name
+  }
+  const cleaned = topic.replace(/[Day\d:：]|\b(学习|计划|复习|备考|入门|进阶|掌握)\b/gi, '').trim()
+  return cleaned.slice(0, 8) || '综合'
+}
+
+function inferPurpose(userProfile?: { type: string; customText: string }, expectedOutcome?: string): string {
+  const profile = userProfile?.type || ''
+  const custom = userProfile?.customText || ''
+  const text = profile + custom + (expectedOutcome || '')
+  if (/考研|备考|应试|考试|期末|竞赛/.test(text)) return '应试备考'
+  if (/项目|实战|开发|搭建/.test(text)) return '项目实战'
+  if (/自学|入门|初学|零基础/.test(text)) return '系统学习'
+  if (/在职|提升|补强|进阶/.test(text)) return '能力提升'
+  return '掌握知识'
+}
+
+const SAMPLE_TASK_TYPES = ['预习', '学习', '学习', '练习', '应用', '复习', '学习', '总结', '学习', '练习']
+
+function buildAutoTags(topic: string, userProfile?: { type: string; customText: string }, expectedOutcome?: string): TagView[] {
+  return [
+    { name: inferSubject(topic), color: getTagColor(inferSubject(topic)), source: 'ai', category: 'subject' },
+    { name: inferPurpose(userProfile, expectedOutcome), color: getTagColor(inferPurpose(userProfile, expectedOutcome)), source: 'ai', category: 'purpose' },
+  ]
 }
 
 // Helper to generate dates
@@ -86,20 +112,25 @@ function loadFromStorage() {
   }
 }
 
-function generateTasks(planId: string, topic: string, startDate: string, days: number, tags: TagView[]): StudyTask[] {
+function generateTasks(planId: string, topic: string, startDate: string, days: number, autoTags: TagView[]): StudyTask[] {
   const tasks: StudyTask[] = []
   const start = new Date(startDate)
   const sampleTasks = [
-    { title: '了解核心概念与背景', description: '阅读入门材料，建立整体认知框架', tag: '入门' },
-    { title: '学习基础理论知识', description: '掌握核心理论要点并做笔记', tag: '理论' },
-    { title: '动手实践练习', description: '完成配套练习题，巩固理解', tag: '实战' },
-    { title: '深入案例学习', description: '通过案例加深对知识点的理解', tag: '案例' },
-    { title: '复习与总结', description: '回顾本周所学内容，整理知识图谱', tag: '复习' },
+    { title: '了解核心概念与背景', description: '阅读入门材料，建立整体认知框架' },
+    { title: '学习基础理论知识', description: '掌握核心理论要点并做笔记' },
+    { title: '动手实践练习', description: '完成配套练习题，巩固理解' },
+    { title: '深入案例学习', description: '通过案例加深对知识点的理解' },
+    { title: '复习与总结', description: '回顾本周所学内容，整理知识图谱' },
   ]
 
   for (let i = 0; i < days; i++) {
     const date = addDays(start, i)
     const sampleIdx = i % sampleTasks.length
+    const taskType = SAMPLE_TASK_TYPES[sampleIdx]
+    const taskTags: TagView[] = [
+      ...autoTags,
+      { name: taskType, color: getTagColor(taskType), source: 'ai', category: 'taskType' }
+    ]
     tasks.push({
       _id: `task_${nextTaskId++}`,
       planId,
@@ -109,9 +140,9 @@ function generateTasks(planId: string, topic: string, startDate: string, days: n
       description: sampleTasks[sampleIdx].description,
       estimatedMinutes: 90,
       priority: 'medium',
-      tags: [{ name: sampleTasks[sampleIdx].tag, color: getTagColor(sampleTasks[sampleIdx].tag) }],
+      tags: taskTags,
       taskNumber: `T-${String(i + 1).padStart(4, '0')}`,
-      taskGroupKey: `${sampleTasks[sampleIdx].title}::${sampleTasks[sampleIdx].tag}`,
+      taskGroupKey: `${sampleTasks[sampleIdx].title}::${autoTags.find(t => t.category === 'subject')?.name || ''}`,
       completed: false,
       editSource: 'ai_generated',
       adjustmentNote: '',
@@ -128,8 +159,9 @@ export function mockCreatePlan(data: { topic: string; objective: string; startDa
   const end = new Date(data.endDate)
   const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
 
-  const tags = (data.tags && data.tags.length > 0) ? data.tags : buildAutoTags(data)
-  const tasks = generateTasks(planId, data.topic, data.startDate, days, tags)
+  const hasUserTags = data.tags && data.tags.length > 0
+  const planTags: TagView[] = hasUserTags ? data.tags! : buildAutoTags(data.topic, data.userProfile, data.expectedOutcome)
+  const tasks = generateTasks(planId, data.topic, data.startDate, days, planTags)
 
   const plan = {
     _id: planId,
@@ -144,7 +176,7 @@ export function mockCreatePlan(data: { topic: string; objective: string; startDa
     platforms: data.platforms || [],
     userProfile: data.userProfile || { type: '其他', customText: '自学者' },
     expectedOutcome: data.expectedOutcome || '',
-    tags,
+    tags: planTags,
     notes: data.notes || '',
     aiSupplement: null,
     status: 'active' as const,
@@ -188,23 +220,23 @@ export function mockListPlans(): PlanSummary[] {
 }
 
 export function mockGetCalendarTasks(startDate: string, endDate: string, selectedDate?: string): { days: CalendarDaySummary[] } {
-  const dayMap = new Map<string, { total: number; completed: number; tags: Set<string>; tagObjs: TagView[] }>()
+  const dayMap = new Map<string, { total: number; completed: number; totalMinutes: number; tags: Set<string>; tagObjs: TagView[] }>()
 
   plans.forEach((detail) => {
     detail.tasks.forEach(task => {
       if (task.date >= startDate && task.date <= endDate) {
         if (!dayMap.has(task.date)) {
-          dayMap.set(task.date, { total: 0, completed: 0, tags: new Set(), tagObjs: [] })
+          dayMap.set(task.date, { total: 0, completed: 0, totalMinutes: 0, tags: new Set(), tagObjs: [] })
         }
         const day = dayMap.get(task.date)!
         day.total++
         if (task.completed) day.completed++
-        task.tags.forEach((t: TagView) => {
-          if (!day.tags.has(t.name)) {
-            day.tags.add(t.name)
-            day.tagObjs.push(t)
-          }
-        })
+        day.totalMinutes += task.estimatedMinutes || 0
+        const subjectTag = task.tags.find((t: TagView) => t.category === 'subject')
+        if (subjectTag && !day.tags.has(subjectTag.name)) {
+          day.tags.add(subjectTag.name)
+          day.tagObjs.push(subjectTag)
+        }
       }
     })
   })
@@ -215,6 +247,7 @@ export function mockGetCalendarTasks(startDate: string, endDate: string, selecte
       date,
       totalTasks: val.total,
       completedTasks: val.completed,
+      totalMinutes: val.totalMinutes,
       tags: val.tagObjs,
       isSelected: date === selectedDate
     })

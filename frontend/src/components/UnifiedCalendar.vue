@@ -190,8 +190,8 @@ function visibleTags(tags: TagView[]): TagView[] {
 }
 .day-cell:hover { background: #f3f4f6; }
 .day-cell.other-month .day-num { color: #d1d5db; }
-.day-cell.today { border: 2px solid #4F46E5; }
-.day-cell.selected { background: #EEF2FF; border: 2px solid #4F46E5; }
+.day-cell.today .day-num { color: #4F46E5; font-weight: 700; font-size: 11px; }
+.day-cell.selected { border: 2px solid #4F46E5; }
 .day-cell.all-done { background: #ECFDF5; }
 .day-cell.partial-done { background: #FFF7ED; }
 .day-cell.has-tasks { font-weight: 500; }

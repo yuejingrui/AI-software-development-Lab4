@@ -1,7 +1,11 @@
 <template>
   <div class="plan-summary-list">
     <h3 class="list-title">学习计划概览</h3>
-    <div v-if="plans.length === 0" class="empty-hint">暂无学习计划，点击"新建学习计划"开始</div>
+    <div v-if="plans.length === 0" class="empty-state">
+      <div class="empty-icon">📅</div>
+      <p class="empty-title">还没有学习计划</p>
+      <p class="empty-hint">点击右上角「+ 新建学习计划」开始吧</p>
+    </div>
     <div v-else class="plan-items">
       <div
         v-for="plan in plans"
@@ -49,7 +53,13 @@ function progressPercent(plan: PlanSummary): number {
 <style scoped>
 .plan-summary-list { padding: 6px 10px; }
 .list-title { margin: 0 0 4px; font-size: 12px; color: #374151; }
-.empty-hint { color: #9CA3AF; font-size: 11px; text-align: center; padding: 8px; }
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 10px 16px; text-align: center;
+}
+.empty-icon { font-size: 28px; margin-bottom: 6px; }
+.empty-title { margin: 0; font-size: 13px; color: #374151; font-weight: 500; }
+.empty-hint { margin: 4px 0 0; font-size: 12px; color: #9CA3AF; }
 .plan-items {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
   overflow-y: auto; max-height: 150px;

@@ -13,137 +13,123 @@ const TASKS_COLL = "study_tasks";
 const CHAT_COLL = "plan_chat_messages";
 const TAG_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16", "#F43F5E", "#14B8A6", "#EAB308", "#6366F1", "#EF4444"];
 
-function pickTagColor(index) {
-  return TAG_COLORS[index % TAG_COLORS.length];
-}
-
-function getTagColor(name, fallbackIndex) {
+function getTagColor(name) {
   const normalized = String(name || "").trim();
-  if (!normalized) return pickTagColor(fallbackIndex || 0);
-
+  if (!normalized) return TAG_COLORS[0];
   let hash = 0;
   for (let i = 0; i < normalized.length; i += 1) {
     hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
   }
-
   return TAG_COLORS[hash % TAG_COLORS.length];
 }
 
 function normalizeTagName(name) {
-  return String(name || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 10);
+  return String(name || "").replace(/\s+/g, " ").trim().slice(0, 10);
 }
 
-function dedupeTags(tags, fallbackSource) {
-  const map = new Map();
-  for (const tag of tags || []) {
-    const name = normalizeTagName(typeof tag === "string" ? tag : tag?.name);
-    if (!name) continue;
-    if (!map.has(name)) {
-      map.set(name, {
-        name,
-        color: getTagColor(name, map.size),
-        source: tag?.source || fallbackSource || "ai"
-      });
-    }
+function hasUserDefinedTags(planLike) {
+  return (planLike?.tags && planLike.tags.length > 0) || false;
+}
+
+// --- Subject classification ---
+
+const SUBJECT_KEYWORDS = [
+  { pattern: /机器学习|深度学习|神经网络|强化学习|迁移学习|自然语言处理|计算机视觉|数据挖掘/, name: "机器学习" },
+  { pattern: /前端|Vue|React|HTML|CSS|JavaScript|TS|TypeScript|Webpack|Vite/, name: "前端开发" },
+  { pattern: /后端|Node\.?js|API|数据库|MySQL|Redis|MongoDB|SQL/, name: "后端开发" },
+  { pattern: /算法|数据结构|LeetCode|竞赛|ACM/, name: "算法" },
+  { pattern: /数学|高数|线代|概率|统计|微积分/, name: "数学" },
+  { pattern: /英语|外语|雅思|托福|四六级|词汇|语法/, name: "英语" },
+  { pattern: /物理|力学|电磁|光学|量子/, name: "物理" },
+  { pattern: /化学|有机|无机|分析/, name: "化学" },
+  { pattern: /生物|基因|细胞|分子/, name: "生物" },
+  { pattern: /历史|近代|古代|世界/, name: "历史" },
+  { pattern: /政治|马原|毛概|思修/, name: "政治" },
+  { pattern: /编程|Python|Java|C\+\+|Go|Rust|开发|代码/, name: "编程" },
+  { pattern: /操作系统|OS|Linux|网络|TCP|HTTP|计算机基础/, name: "计算机基础" },
+  { pattern: /Android|iOS|移动开发|小程序|Flutter|React\s*Native/, name: "移动开发" },
+];
+
+function inferSubject(topic) {
+  const raw = String(topic || "");
+  for (const entry of SUBJECT_KEYWORDS) {
+    if (entry.pattern.test(raw)) return entry.name;
   }
-  return Array.from(map.values());
+  const cleaned = raw.replace(/[Day\d:：]|\b(学习|计划|复习|备考|入门|进阶|掌握)\b/gi, "").trim();
+  const fallback = normalizeTagName(cleaned) || "综合";
+  return fallback.slice(0, 8);
 }
 
-function splitTagCandidates(text) {
-  const cleaned = String(text || "")
-    .replace(/Day\s*\d+\s*[:：]\s*/gi, "")
-    .replace(/[【】\[\]<>]/g, " ")
-    .trim();
-  if (!cleaned) return [];
+function inferPurpose(planLike) {
+  const profile = String(planLike?.userProfile?.type || "").trim();
+  const custom = String(planLike?.userProfile?.customText || "").trim();
+  const objective = String(planLike?.objective || "").trim();
+  const outcome = String(planLike?.expectedOutcome || "").trim();
 
-  const parts = cleaned
-    .split(/[\s,，、;；/|:+\-()（）]+|以及|与|和|及/g)
-    .map((part) => normalizeTagName(part))
-    .filter(Boolean);
-
-  return Array.from(new Set(parts));
+  if (/考研|备考|应试|考试|期末|竞赛/.test(profile + custom + objective + outcome)) return "应试备考";
+  if (/项目|实战|开发|搭建/.test(profile + custom + objective + outcome)) return "项目实战";
+  if (/自学|入门|初学|零基础/.test(profile + custom + objective + outcome)) return "系统学习";
+  if (/在职|提升|补强|进阶/.test(profile + custom + objective + outcome)) return "能力提升";
+  return "掌握知识";
 }
 
-function inferStageTags(text) {
-  const raw = String(text || "");
-  const tagNames = [];
-  if (/基础|入门|初学|概述/.test(raw)) tagNames.push("入门");
-  if (/核心|理论|概念/.test(raw)) tagNames.push("理论");
-  if (/实战|项目|练习|案例|应用/.test(raw)) tagNames.push("实战");
-  if (/复习|总结|回顾/.test(raw)) tagNames.push("复习");
-  return tagNames;
+function inferTaskType(taskTitle, taskDesc) {
+  const text = `${taskTitle || ""} ${taskDesc || ""}`;
+  if (/复习|回顾|回顾总结/.test(text)) return "复习";
+  if (/预习|概述|了解|概念与背景/.test(text)) return "预习";
+  if (/练习|动手|实战|实践|训练/.test(text)) return "练习";
+  if (/案例|深入|应用/.test(text)) return "应用";
+  if (/总结|整理/.test(text)) return "总结";
+  if (/学习|掌握|基础理论/.test(text)) return "学习";
+  return "学习";
 }
 
-function buildAutoTags(planLike) {
-  const topic = normalizeTagName(planLike?.topic);
-  const profileText = planLike?.userProfile?.type === "其他"
-    ? normalizeTagName(planLike?.userProfile?.customText)
-    : normalizeTagName(planLike?.userProfile?.type);
+function buildCategoryTag(name, category, source) {
+  return {
+    name: normalizeTagName(name),
+    color: getTagColor(name),
+    source: source || "ai",
+    category
+  };
+}
 
-  const names = [
-    ...splitTagCandidates(planLike?.topic).filter((part) => part !== topic),
-    ...splitTagCandidates((planLike?.references || []).slice(0, 2).join(" ")),
-    ...inferStageTags(`${planLike?.topic || ""} ${planLike?.description || ""} ${planLike?.expectedOutcome || ""}`)
+function buildAutoTaskTags(task, planLike) {
+  if (hasUserDefinedTags(planLike)) {
+    return (planLike.tags || []).map((tag) => ({
+      name: normalizeTagName(tag.name),
+      color: tag.color || getTagColor(tag.name),
+      source: "user",
+      category: tag.category || "tag"
+    }));
+  }
+  return [
+    buildCategoryTag(inferSubject(planLike?.topic), "subject", "ai"),
+    buildCategoryTag(inferPurpose(planLike), "purpose", "ai"),
+    buildCategoryTag(inferTaskType(task?.title, task?.description), "taskType", "ai")
   ];
-
-  if (profileText && profileText !== "其他") {
-    names.push(profileText);
-  }
-
-  const uniqueNames = Array.from(new Set(names.filter(Boolean)));
-  if (uniqueNames.length === 0) {
-    uniqueNames.push("学习计划");
-    if (profileText && profileText !== "其他") uniqueNames.push(profileText);
-    uniqueNames.push("重点学习");
-  }
-
-  return dedupeTags(
-    uniqueNames.slice(0, 4).map((name, index) => ({
-      name,
-      color: pickTagColor(index),
-      source: "ai"
-    })),
-    "ai"
-  );
-}
-
-function shouldRegeneratePlanTags(planLike, tags) {
-  const normalized = dedupeTags(tags);
-  if (normalized.length === 0) return true;
-  const topic = normalizeTagName(planLike?.topic);
-  return normalized.length === 1 && normalized[0].name === topic;
 }
 
 function resolvePlanTags(planLike) {
-  const storedTags = dedupeTags(planLike?.tags, "user");
-  if (!shouldRegeneratePlanTags(planLike, storedTags)) {
-    return storedTags;
+  if (hasUserDefinedTags(planLike)) {
+    return (planLike.tags || []).map((tag) => ({ ...tag, source: "user" }));
   }
-  return buildAutoTags(planLike);
+  return [{
+    name: normalizeTagName(inferSubject(planLike?.topic)),
+    color: getTagColor(inferSubject(planLike?.topic)),
+    source: "ai",
+    category: "subject"
+  }];
 }
 
-function pickBestTaskTag(task, planTags) {
-  const storedTags = dedupeTags(task?.tags, "user");
-  const title = normalizeTagName(task?.title);
-  const looksLikeBadTaskTags = storedTags.length === 1 && storedTags[0].name === title;
-  const candidates = dedupeTags([
-    ...(looksLikeBadTaskTags ? [] : storedTags),
-    ...(planTags || []),
-    ...dedupeTags(
-      inferStageTags(`${task?.title || ""} ${task?.description || ""}`)
-        .slice(0, 1)
-        .map((name, index) => ({ name, color: pickTagColor(index + 3), source: "ai" })),
-      "ai"
-    )
-  ]);
-  return candidates.slice(0, 1);
+function resolveTaskTags(task, planLike) {
+  if (planLike?._hasUserTags) {
+    return (planLike.tags || []).map((tag) => ({ ...tag, source: "user" }));
+  }
+  return buildAutoTaskTags(task, planLike);
 }
 
-function resolveTaskTags(task, planTags) {
-  return pickBestTaskTag(task, planTags);
+function getSubjectTag(tags) {
+  return (tags || []).find(tag => tag.category === "subject") || null;
 }
 
 function formatTaskNumber(task, fallbackIndex) {
@@ -160,13 +146,13 @@ function formatTaskNumber(task, fallbackIndex) {
 
 function getTaskGroupKey(task) {
   const titleKey = String(task?.title || "").trim().toLowerCase();
-  const tagName = normalizeTagName((task?.tags || [])[0]?.name).toLowerCase();
+  const subjectTag = getSubjectTag(task?.tags);
+  const tagName = (subjectTag?.name || "").toLowerCase();
   return `${titleKey}::${tagName}`;
 }
 
 function enrichTask(task, plan, index) {
-  const planTags = resolvePlanTags(plan || {});
-  const tags = resolveTaskTags(task, planTags);
+  const tags = resolveTaskTags(task, plan);
   return {
     ...task,
     tags,
@@ -218,11 +204,11 @@ function fallbackTasks(topic, startDate, endDate, dailyMinutes, tags) {
   const end = new Date(endDate);
   const days = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
   const templates = [
-    { title: "了解核心概念与背景", desc: "阅读入门材料，建立整体认知框架", priority: "medium", tag: "入门" },
-    { title: "学习基础理论知识", desc: "掌握核心理论要点并做笔记", priority: "high", tag: "理论" },
-    { title: "动手实践练习", desc: "完成配套练习题，巩固理解", priority: "high", tag: "实战" },
-    { title: "深入案例学习", desc: "通过案例加深对知识点的理解", priority: "medium", tag: "案例" },
-    { title: "复习与总结", desc: "回顾所学内容，整理知识图谱", priority: "low", tag: "复习" }
+    { title: "了解核心概念与背景", desc: "阅读入门材料，建立整体认知框架", priority: "medium" },
+    { title: "学习基础理论知识", desc: "掌握核心理论要点并做笔记", priority: "high" },
+    { title: "动手实践练习", desc: "完成配套练习题，巩固理解", priority: "high" },
+    { title: "深入案例学习", desc: "通过案例加深对知识点的理解", priority: "medium" },
+    { title: "复习与总结", desc: "回顾所学内容，整理知识图谱", priority: "low" }
   ];
 
   for (let i = 0; i < days; i++) {
@@ -235,7 +221,7 @@ function fallbackTasks(topic, startDate, endDate, dailyMinutes, tags) {
       description: template.desc,
       estimatedMinutes: dailyMinutes || 60,
       priority: template.priority,
-      tags: [{ name: template.tag, color: pickTagColor(i % TAG_COLORS.length), source: "ai" }]
+      tags: [] // filled by enrichTask auto-generation
     });
   }
 
@@ -314,6 +300,7 @@ async function getPlanMap() {
   for (const plan of plans) {
     map.set(plan._id, {
       ...plan,
+      _hasUserTags: hasUserDefinedTags(plan),
       tags: resolvePlanTags(plan)
     });
   }
@@ -344,11 +331,7 @@ async function handleCreatePlan(body) {
   const start = new Date(body.startDate);
   const end = new Date(body.endDate);
   const durationDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
-  const userTags = dedupeTags(
-    (body.tags || []).map((tag) => ({ ...tag, source: "user" })),
-    "user"
-  );
-  const tags = userTags.length > 0 ? userTags : buildAutoTags(body);
+  const tags = resolvePlanTags(body);
 
   const planDoc = {
     topic: body.topic,
@@ -413,7 +396,7 @@ async function handleListPlans() {
   const summaries = [];
 
   for (const plan of plans) {
-    const resolvedPlan = { ...plan, tags: resolvePlanTags(plan) };
+    const resolvedPlan = { ...plan, _hasUserTags: hasUserDefinedTags(plan), tags: resolvePlanTags(plan) };
     const tasksResult = await db.collection(TASKS_COLL).where({ planId: plan._id }).get();
     const tasks = tasksResult.data || [];
     summaries.push({
@@ -445,18 +428,18 @@ async function handleGetCalendarTasks(body) {
   for (const task of tasks) {
     const plan = planMap.get(task.planId);
     if (!plan) continue;
-    const effectiveTags = resolveTaskTags(task, plan.tags);
+    const effectiveTags = resolveTaskTags(task, plan);
+    const subjectTag = getSubjectTag(effectiveTags);
     if (!dayMap.has(task.date)) {
-      dayMap.set(task.date, { totalTasks: 0, completedTasks: 0, tags: [], tagSet: new Set() });
+      dayMap.set(task.date, { totalTasks: 0, completedTasks: 0, totalMinutes: 0, tags: [], tagSet: new Set() });
     }
     const day = dayMap.get(task.date);
     day.totalTasks += 1;
     if (task.completed) day.completedTasks += 1;
-    for (const tag of effectiveTags) {
-      if (!day.tagSet.has(tag.name)) {
-        day.tagSet.add(tag.name);
-        day.tags.push(tag);
-      }
+    day.totalMinutes += task.estimatedMinutes || 0;
+    if (subjectTag && !day.tagSet.has(subjectTag.name)) {
+      day.tagSet.add(subjectTag.name);
+      day.tags.push(subjectTag);
     }
   }
 
@@ -464,6 +447,7 @@ async function handleGetCalendarTasks(body) {
     date,
     totalTasks: value.totalTasks,
     completedTasks: value.completedTasks,
+    totalMinutes: value.totalMinutes,
     tags: value.tags,
     isSelected: date === selectedDate
   })).sort((a, b) => a.date.localeCompare(b.date));
@@ -505,7 +489,7 @@ async function handleGetPlanDetail(body) {
   if (!plan) throw new Error("计划不存在");
   const tasksResult = await db.collection(TASKS_COLL).where({ planId: body.planId }).orderBy("dayIndex", "asc").get();
   const chatResult = await db.collection(CHAT_COLL).where({ planId: body.planId }).orderBy("createdAt", "asc").get();
-  const resolvedPlan = { ...plan, tags: resolvePlanTags(plan) };
+  const resolvedPlan = { ...plan, _hasUserTags: hasUserDefinedTags(plan), tags: resolvePlanTags(plan) };
   const tasks = (tasksResult.data || []).map((task, index) => enrichTask(task, resolvedPlan, index));
 
   return {
@@ -727,6 +711,45 @@ async function handleSuggestCompletion(body) {
   };
 }
 
+async function handleUpdatePlan(body) {
+  const { planId, ...updates } = body;
+  if (!planId) throw new Error("缺少必填字段：planId");
+
+  const plan = await getPlanById(planId);
+  if (!plan) throw new Error("计划不存在");
+
+  const updateData = { updatedAt: new Date().toISOString() };
+
+  if (updates.topic !== undefined) updateData.topic = updates.topic;
+  if (updates.objective !== undefined) updateData.objective = updates.objective;
+  if (updates.startDate !== undefined) {
+    updateData.startDate = updates.startDate;
+    if (updates.endDate !== undefined || plan.endDate) {
+      const start = new Date(updates.startDate);
+      const end = new Date(updates.endDate || plan.endDate);
+      updateData.durationDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
+    }
+  }
+  if (updates.endDate !== undefined) {
+    updateData.endDate = updates.endDate;
+    const start = new Date(updates.startDate || plan.startDate);
+    const end = new Date(updates.endDate);
+    updateData.durationDays = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
+  }
+  if (updates.dailyMinutes !== undefined) updateData.dailyMinutes = updates.dailyMinutes;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.references !== undefined) updateData.references = updates.references;
+  if (updates.platforms !== undefined) updateData.platforms = updates.platforms;
+  if (updates.userProfile !== undefined) updateData.userProfile = updates.userProfile;
+  if (updates.expectedOutcome !== undefined) updateData.expectedOutcome = updates.expectedOutcome;
+  if (updates.tags !== undefined) updateData.tags = updates.tags;
+  if (updates.notes !== undefined) updateData.notes = updates.notes;
+  if (updates.status !== undefined) updateData.status = updates.status;
+
+  const result = await db.collection(PLANS_COLL).doc(planId).update(updateData);
+  return { success: (result.updated || 0) > 0 };
+}
+
 async function handleDeletePlan(body) {
   const { planId } = body;
   if (!planId) throw new Error("缺少必填字段：planId");
@@ -772,6 +795,7 @@ const ACTIONS = {
   getTasksByDate: handleGetTasksByDate,
   getPlanDetail: handleGetPlanDetail,
   updateTaskStatus: handleUpdateTaskStatus,
+  updatePlan: handleUpdatePlan,
   updateTaskInfo: handleUpdateTaskInfo,
   saveChatMessage: handleSaveChatMessage,
   generateTasks: handleGenerateTasks,
@@ -788,6 +812,7 @@ const ROUTES = {
   "POST /getTasksByDate": handleGetTasksByDate,
   "POST /getPlanDetail": handleGetPlanDetail,
   "POST /updateTaskStatus": handleUpdateTaskStatus,
+  "POST /updatePlan": handleUpdatePlan,
   "POST /updateTaskInfo": handleUpdateTaskInfo,
   "POST /saveChatMessage": handleSaveChatMessage,
   "POST /generateTasks": handleGenerateTasks,
