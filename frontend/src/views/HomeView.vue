@@ -4,6 +4,15 @@
     <header class="top-bar">
       <h1 class="app-title">学习计划工作台</h1>
       <button class="btn-new-plan" @click="showCreateDialog = true">+ 新建学习计划</button>
+      <div v-if="planSummaries.length > 0" class="btn-export-all-wrapper">
+        <button class="btn-export-all" :disabled="exportingAll" @click="toggleExportAllMenu">
+          {{ exportingAll ? '导出中...' : '导出全部 ▾' }}
+        </button>
+        <div v-if="showExportAllMenu" class="export-dropdown">
+          <button @click="handleExportAll('md')">Markdown (.md)</button>
+          <button @click="handleExportAll('txt')">纯文本 (.txt)</button>
+        </div>
+      </div>
     </header>
 
     <!-- 主体区域 -->
@@ -104,6 +113,7 @@ import {
   createPlan, listPlans, getCalendarTasks,
   getTasksByDate, updateTaskStatus, deletePlan, cleanupOrphanTasks
 } from '@/services/data'
+import { exportAllPlans } from '@/services/export'
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -133,6 +143,28 @@ const showDeleteConfirm = ref(false)
 const deletingPlanId = ref('')
 const deletingPlanTopic = ref('')
 const deleting = ref(false)
+
+// --- 导出全部状态 ---
+const exportingAll = ref(false)
+const showExportAllMenu = ref(false)
+
+function toggleExportAllMenu() {
+  showExportAllMenu.value = !showExportAllMenu.value
+}
+
+async function handleExportAll(format: 'md' | 'txt') {
+  showExportAllMenu.value = false
+  exportingAll.value = true
+  try {
+    await exportAllPlans(format)
+  } catch (e: any) {
+    if (e?.message !== "AbortError") {
+      showToast('导出失败：' + (e?.message || '未知错误'), 'error')
+    }
+  } finally {
+    exportingAll.value = false
+  }
+}
 
 const now = new Date()
 const currentYear = ref(now.getFullYear())
@@ -324,6 +356,25 @@ onMounted(async () => {
   border-radius: 8px; font-size: 12px; cursor: pointer; transition: background 0.15s;
 }
 .btn-new-plan:hover { background: #4338CA; }
+.btn-export-all-wrapper { position: relative; display: inline-block; }
+.btn-export-all {
+  padding: 5px 14px; background: #fff; color: #374151; border: 1px solid #d1d5db;
+  border-radius: 8px; font-size: 12px; cursor: pointer; transition: background 0.15s;
+}
+.btn-export-all:hover { background: #F3F4F6; }
+.btn-export-all:disabled { opacity: 0.5; cursor: not-allowed; }
+.export-dropdown {
+  position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100;
+  min-width: 160px;
+}
+.export-dropdown button {
+  display: block; width: 100%; text-align: left;
+  padding: 8px 14px; border: none; background: none;
+  font-size: 13px; cursor: pointer; color: #374151;
+}
+.export-dropdown button:hover { background: #F3F4F6; }
 .main-content {
   display: flex; gap: 8px; flex: 1; min-height: 0;
 }

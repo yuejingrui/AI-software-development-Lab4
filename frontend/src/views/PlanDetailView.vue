@@ -6,6 +6,15 @@
         <button class="btn-back" @click="$router.push('/')">&larr; 返回工作台</button>
         <div class="header-actions">
           <button v-if="!editingPlan" class="btn-edit" @click="startEditPlan">编辑计划</button>
+          <div v-if="!editingPlan && plan" class="btn-export-wrapper">
+            <button class="btn-export" :disabled="exporting" @click="toggleExportMenu">
+              {{ exporting ? '导出中...' : '导出 ▾' }}
+            </button>
+            <div v-if="showExportMenu" class="export-dropdown">
+              <button @click="handleExport('md')">Markdown (.md)</button>
+              <button @click="handleExport('txt')">纯文本 (.txt)</button>
+            </div>
+          </div>
           <button class="btn-delete" @click="showDeleteConfirm = true">删除计划</button>
         </div>
       </div>
@@ -285,6 +294,7 @@ import {
   refinePlan, saveChatMessage, deletePlan, updatePlan,
   getTagColor
 } from '@/services/data'
+import { exportPlan } from '@/services/export'
 
 const route = useRoute()
 const router = useRouter()
@@ -339,6 +349,29 @@ const editPlanForm = reactive<EditPlanForm>({
   tags: [],
   notes: ''
 })
+
+// --- 导出状态 ---
+const exporting = ref(false)
+const showExportMenu = ref(false)
+
+function toggleExportMenu() {
+  showExportMenu.value = !showExportMenu.value
+}
+
+async function handleExport(format: 'md' | 'txt') {
+   showExportMenu.value = false
+   exporting.value = true
+   try {
+     await exportPlan(planId.value, format)
+   } catch (e: any) {
+     if (e?.message !== "AbortError") {
+       toast.value = { message: '导出失败：' + (e?.message || '未知错误'), type: 'error' }
+       setTimeout(() => { toast.value = null }, 3000)
+     }
+   } finally {
+     exporting.value = false
+   }
+ }
 
 const completedCount = computed(() => plan.value ? plan.value.tasks.filter((t: { completed: boolean }) => t.completed).length : 0)
 const detailTagOptions = computed(() => {
@@ -610,6 +643,25 @@ onMounted(() => {
   padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
 }
 .btn-delete:hover { background: #FEF2F2; }
+.btn-export-wrapper { position: relative; display: inline-block; }
+.btn-export {
+  background: none; border: 1px solid #6B7280; color: #374151;
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.btn-export:hover { background: #F3F4F6; }
+.btn-export:disabled { opacity: 0.5; cursor: not-allowed; }
+.export-dropdown {
+  position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100;
+  min-width: 160px;
+}
+.export-dropdown button {
+  display: block; width: 100%; text-align: left;
+  padding: 8px 14px; border: none; background: none;
+  font-size: 13px; cursor: pointer; color: #374151;
+}
+.export-dropdown button:hover { background: #F3F4F6; }
 .confirm-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center; z-index: 1000;

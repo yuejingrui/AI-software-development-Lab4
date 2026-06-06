@@ -22,7 +22,7 @@
 
 ```bash
 cd tests
-node --test src/run.js
+node --test src/runner.js
 ```
 
 ### 运行单个 spec
@@ -39,7 +39,7 @@ node --test src/specs/daily-detail-view.test.js
 
 ```bash
 cd tests
-node --test --test-reporter=spec src/run.js
+node --test --test-reporter=spec src/runner.js
 ```
 
 ### 自定义云函数地址
@@ -47,7 +47,7 @@ node --test --test-reporter=spec src/run.js
 ```bash
 # 指定其他环境
 $env:CLOUDBASE_FUNCTION_URL="https://other-env.service.tcloudbase.com/api/lab4-http"
-node --test src/run.js
+node --test src/runner.js
 ```
 
 ## 目录结构
@@ -57,7 +57,7 @@ tests/
 ├── README.md
 ├── package.json          # "type": "module"，零依赖
 ├── src/
-│   ├── run.js            # 入口：导入全部 spec 测试
+│   ├── runner.js            # 入口：导入全部 spec 测试
 │   ├── api.js            # HTTP API 客户端，封装全部云函数调用
 │   ├── utils.js          # 断言工具 / 日期工具 / 测试数据工厂 / 状态追踪
 │   └── specs/
