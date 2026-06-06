@@ -1,6 +1,6 @@
 # 学习计划工作台 (Study Plan Workbench)
 
-基于 Vue 3 + CloudBase 的学习计划管理应用，支持 AI 驱动的学习任务生成与计划优化。
+基于 Vue 3 + CloudBase 的学习计划管理应用，支持 AI 驱动的学习任务生成、子任务拆分、统一日历展示、计划导出。
 
 ## 在线访问
 
@@ -8,154 +8,170 @@
 - **CloudBase 环境 ID**: `lab3-3-d5gdcm7qo10ced8af`
 - **区域**: `ap-shanghai`
 
-> 注意：CDN 缓存可能需要几分钟才能反映最新部署。如看到旧版本，请在 URL 后添加随机查询参数（如 `?v=123`）强制刷新。
+---
+
+## 功能
+
+### 学习计划管理
+- 创建/编辑/删除学习计划（主题、日期范围、每日时长、用户身份、扩展字段）
+- 10 种预设用户画像 + 自定义身份
+- **用户身份必填**：未选择或"其他"为空时拒绝提交
+- AI 自动补全非必要字段 + AI 生成逐日学习任务
+- 多计划共存，互不干扰
+
+### 统一日历
+- 按月聚合展示所有计划的每日任务
+- 日期格状态：全部完成（绿）/ 部分完成（橙）/ 无任务（白）
+- 今日日期高亮，选中日期蓝色边框
+- 标签色块展示（去重，最多 8 个）
+- 全局统计面板：总计划数 / 总学习天数 / 总时长 / 完成率
+
+### 每日任务详情
+- 路由：`/day/YYYY-MM-DD`，前一天/后一天导航
+- 任务按计划分组展示，每组标题可点击跳转到计划详情
+- 完成状态 checkbox，乐观更新 + 持久化
+- 按标签和完成状态筛选
+
+### 子任务（实施步骤）
+- **AI 拆分子任务**：DeepSeek 生成 3-5 个可逐个执行的子任务
+- **手动创建/编辑/删除**：用户可在 AI 子任务基础上补充
+- 用户子任务 (`source: user`) 与 AI 子任务 (`source: ai`) 共存
+- **重新拆分**：仅覆盖 AI 子任务，保留用户手动创建的
+- 级联规则：子任务全完成 → 父任务自动完成
+- 子任务集合缺失时自动创建，查询异常时降级为空
+
+### 计划导出
+- **单个计划导出**：计划详情页 → 导出按钮 → 选择 Markdown 或 TXT
+- **全部计划导出**：首页 → 导出全部按钮 → 合并所有计划为单一文件
+- 支持 `showSaveFilePicker` 选择保存路径，不支持时降级为浏览器下载
+- 导出内容含计划名称、日期、任务标题/描述/时长/完成状态
+
+### 计划详情页
+- 路由：`/plan/:planId`，编辑计划基本信息 + 标签
+- 任务列表，支持按标签和完成状态筛选
+- AI 对话优化：在计划详情页与 AI 对话获得任务调整建议
 
 ---
 
-## 架构概览
+## 架构
 
 ```
-┌─────────────────────────────┐     ┌──────────────────────────┐
-│   Vue 3 前端 (SPA)           │     │  CloudBase 云函数          │
-│   部署于静态托管              │────▶│  lab4-http (HTTP 函数)     │
-│   @cloudbase/js-sdk          │     │  Node.js 18.15            │
-│   匿名认证 + Bearer Token     │     │  @cloudbase/node-sdk      │
-└─────────────────────────────┘     └──────────┬───────────────┘
-         │                                      │
-         │              ┌───────────────────────┤
-         ▼              ▼                       ▼
-   ┌──────────────┐  ┌──────────────────┐  ┌──────────────┐
-   │ CloudBase    │  │ NoSQL 数据库      │  │ DeepSeek     │
-   │ Auth (匿名)   │  │ study_plans      │  │ API (AI 模型) │
-   │              │  │ study_tasks      │  │              │
-   └──────────────┘  │ plan_chat_msgs   │  └──────────────┘
-                     └──────────────────┘
+┌──────────────────────────┐     ┌────────────────────────────┐
+│  Vue 3 前端 (SPA)         │     │  CloudBase HTTP 云函数       │
+│  Vite 6 + TypeScript     │────▶│  lab4-http (Node.js 18.15)  │
+│  Vue Router (Hash 模式)   │     │  @cloudbase/node-sdk        │
+│  @cloudbase/js-sdk        │     │  20 个 POST action          │
+└──────────────────────────┘     └────────────┬───────────────┘
+                                              │
+                              ┌───────────────┼───────────────┐
+                              ▼               ▼               ▼
+                       ┌──────────┐   ┌──────────┐   ┌──────────┐
+                       │ study_   │   │ study_   │   │ plan_chat│
+                       │ plans    │   │ tasks    │   │ _messages│
+                       └──────────┘   └──────────┘   └──────────┘
+                              ▲
+                       ┌──────────┐
+                       │ study_   │
+                       │ subtasks │
+                       └──────────┘
 ```
 
-## CloudBase 资源
+---
 
-| 资源 | 名称 | 说明 |
-|------|------|------|
-| HTTP 云函数 | `lab4-http` | AI 任务生成、计划优化、字段补全 |
-| NoSQL 集合 | `study_plans` | 学习计划 |
-| NoSQL 集合 | `study_tasks` | 学习任务 |
-| NoSQL 集合 | `plan_chat_messages` | AI 对话记录 |
-| 静态托管 | 前端 SPA | Vue 3 构建产物 |
-
-## 项目结构
+## 目录结构
 
 ```
 Lab4/
-├── frontend/                    # Vue 3 前端项目
+├── frontend/                    # Vue 3 前端
 │   ├── src/
-│   │   ├── views/               # 页面组件
-│   │   │   ├── HomeView.vue     # 主页（日历 + 任务面板）
-│   │   │   └── PlanDetailView.vue  # 计划详情页
+│   │   ├── views/               # 页面
+│   │   │   ├── HomeView.vue         # 首页（日历 + 任务面板 + 统计）
+│   │   │   ├── PlanDetailView.vue   # 计划详情
+│   │   │   └── DayDetailView.vue    # 每日详情
 │   │   ├── components/          # UI 组件
+│   │   │   ├── UnifiedCalendar.vue  # 统一日历
+│   │   │   ├── DayTaskPanel.vue     # 左侧任务预览
+│   │   │   ├── PlanSummaryList.vue  # 计划概览列表
+│   │   │   ├── PlanCreateDialog.vue # 计划创建弹窗
+│   │   │   └── TagChip.vue         # 标签色块
 │   │   ├── services/
-│   │   │   ├── cloudbase.ts     # CloudBase SDK 初始化 + HTTP 函数调用
-│   │   │   └── data.ts          # 数据库操作层
-│   │   ├── types/               # TypeScript 类型定义
-│   │   └── router/              # Vue Router 配置
-│   ├── index.html
-│   ├── vite.config.ts
+│   │   │   ├── cloudbase.ts     # CloudBase SDK 初始化
+│   │   │   ├── data.ts          # API 层（20 个云函数 action）
+│   │   │   └── export.ts        # 计划导出（Markdown/TXT）
+│   │   ├── types/
+│   │   │   ├── plan.ts          # StudyPlan / PlanSummary / TagView
+│   │   │   └── task.ts          # StudyTask / DayTaskView / SubTask
+│   │   └── router/index.ts      # 路由（Hash 模式）
 │   └── package.json
 ├── cloudfunctions/
 │   └── lab4-http/               # HTTP 云函数
-│       ├── index.js             # 函数代码（http.createServer）
+│       ├── index.js             # 20 个 action handler
 │       ├── package.json
-│       └── scf_bootstrap        # 启动脚本
-└── config/
-    └── mcporter.json            # CloudBase MCP 配置
-```
-
-## 云函数 API
-
-### 端点
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/health` | 健康检查 |
-| `POST` | `/generateTasks` | AI 生成学习任务 |
-| `POST` | `/refinePlan` | AI 优化学习计划 |
-| `POST` | `/suggestCompletion` | AI 补全计划字段 |
-
-### 调用方式
-
-**方式一：直接函数调用**
-```
-POST https://lab3-3-d5gdcm7qo10ced8af.api.tcloudbasegateway.com/v1/functions/lab4-http?webfn=true
-Authorization: Bearer <CloudBase_Access_Token>
-```
-
-**方式二：网关路径**
-```
-POST https://lab3-3-d5gdcm7qo10ced8af.api.tcloudbasegateway.com/api/lab4-http
-Authorization: Bearer <CloudBase_Access_Token>
-```
-
-前端通过 `@cloudbase/js-sdk` 匿名登录后获取 Access Token，自动携带 Bearer Token 调用函数。
-
-### 请求示例
-
-```bash
-# 健康检查
-curl "https://lab3-3-d5gdcm7qo10ced8af.api.tcloudbasegateway.com/api/lab4-http/health"
-
-# AI 补全建议
-curl -X POST "https://lab3-3-d5gdcm7qo10ced8af.api.tcloudbasegateway.com/api/lab4-http" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{"action":"suggestCompletion","topic":"机器学习","description":"","expectedOutcome":"","dailyMinutes":60}'
+│       └── scf_bootstrap
+├── tests/                       # 自动化测试（node:test，零依赖）
+│   ├── src/
+│   │   ├── api.js               # HTTP API 客户端
+│   │   ├── utils.js             # 断言 / 数据工厂 / 清理
+│   │   ├── runner.js            # 测试入口
+│   │   └── specs/               # 5 个 spec，114 项测试
+│   ├── README.md
+│   └── package.json
+├── .trae/
+│   ├── specs/                   # 5 套规格文档
+│   ├── skills/
+│   │   ├── deploy/SKILL.md      # 通用部署 Skill
+│   │   └── git_commit/SKILL.md  # Git 提交 Skill
+│   └── rules/
+│       └── deployment-guide.md  # CloudBase 部署指南
+└── README.md
 ```
 
 ---
 
-## 环境变量配置
+## 云函数 API
 
-### DEEPSEEK_API_KEY
+全部通过 HTTP POST 调用，`body.action` 指定具体操作：
 
-API Key **不在代码中硬编码**，通过云函数环境变量配置。
+| action | 说明 |
+|--------|------|
+| `createPlan` | 创建学习计划 + AI 生成任务 |
+| `listPlans` | 列出全部计划摘要 |
+| `getPlanDetail` | 获取计划详情（含任务和聊天） |
+| `updatePlan` | 编辑计划基本信息 |
+| `deletePlan` | 删除计划及其关联任务 |
+| `getCalendarTasks` | 获取月历数据（日期聚合） |
+| `getTasksByDate` | 获取某天全部任务 |
+| `updateTaskStatus` | 更新任务完成状态 |
+| `updateTaskInfo` | 编辑任务标题/描述/时长 |
+| `generateTasks` | AI 重新生成任务 |
+| `generateSubtasks` | AI 拆分子任务 |
+| `createSubtask` | 手动创建子任务 |
+| `updateSubtask` | 编辑子任务标题 |
+| `deleteSubtask` | 删除子任务 |
+| `updateSubtaskStatus` | 更新子任务完成状态 |
+| `getSubtasks` | 查询任务的子任务列表 |
+| `refinePlan` | AI 对话优化计划 |
+| `saveChatMessage` | 保存 AI 对话消息 |
+| `cleanupOrphanTasks` | 清理孤儿任务 |
+| `GET /health` | 健康检查 |
 
-#### 当前状态
+---
 
-环境变量 `DEEPSEEK_API_KEY` 已在云函数中配置。当前为占位值 `YOUR_DEEPSEEK_API_KEY_HERE`，需要替换为真实的 DeepSeek API Key。
-
-#### 配置方法
-
-**方法一：CloudBase 控制台（推荐）**
-
-1. 打开 [CloudBase 控制台 - 云函数](https://tcb.cloud.tencent.com/dev?envId=lab3-3-d5gdcm7qo10ced8af#/scf)
-2. 点击 `lab4-http` 进入函数详情
-3. 点击「函数配置」→「环境变量」→「编辑」
-4. 修改 `DEEPSEEK_API_KEY` 的值为你的 DeepSeek API Key
-5. 保存并等待函数重新部署
-
-**方法二：通过 MCP 工具更新**
-
-```bash
-cd <项目目录>
-MSYS_NO_PATHCONV=1 npx mcporter call cloudbase.manageFunctions \
-  action="updateFunctionConfig" \
-  functionName="lab4-http" \
-  envVariables='{"DEEPSEEK_API_KEY":"sk-your-actual-api-key"}' \
-  --output json
-```
-
-**方法三：通过 tcb CLI**
+## 自动化测试
 
 ```bash
-tcb fn config update lab4-http --envVariables '{"DEEPSEEK_API_KEY":"sk-your-actual-api-key"}'
+cd tests
+node --test src/specs/require-user-identity.test.js  # 6 项
+node --test src/specs/study-plan-workbench.test.js   # 27 项
+node --test src/specs/unified-calendar-enhance.test.js # 12 项
+node --test src/specs/daily-detail-view.test.js      # 38 项
+node --test src/specs/plan-export.test.js            # 31 项
+
+# 运行全部 114 项
+node --test --test-reporter=spec src/specs/require-user-identity.test.js src/specs/study-plan-workbench.test.js src/specs/unified-calendar-enhance.test.js src/specs/daily-detail-view.test.js src/specs/plan-export.test.js
 ```
 
-#### 获取 DeepSeek API Key
-
-1. 访问 [DeepSeek 开放平台](https://platform.deepseek.com/)
-2. 注册/登录账号
-3. 进入「API Keys」页面创建新 Key
-4. 复制 Key 并按上述方法配置
-
-> 即使未配置 API Key，应用仍可正常运行——此时 AI 功能会降级为内置的模板化任务生成，不影响基本使用。
+零外部依赖，仅需 Node.js >= 18.15。测试自动创建所需计划并在结束后清理。
 
 ---
 
@@ -171,150 +187,71 @@ tcb fn config update lab4-http --envVariables '{"DEEPSEEK_API_KEY":"sk-your-actu
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev       # http://localhost:5173
 ```
-
-前端开发服务器默认运行在 `http://localhost:5173`。
 
 ### 云函数本地测试
 
 ```bash
 cd cloudfunctions/lab4-http
 npm install
-node index.js
-# 服务监听在 http://localhost:9000
+node index.js     # http://localhost:9000
 
-# 测试健康检查
+# 测试
 curl http://localhost:9000/health
-
-# 测试 AI 补全
-curl -X POST http://localhost:9000/suggestCompletion \
-  -H "Content-Type: application/json" \
-  -d '{"topic":"机器学习","description":"","expectedOutcome":"","dailyMinutes":60}'
 ```
 
-> 本地测试时需要设置环境变量 `DEEPSEEK_API_KEY` 才能使用 AI 功能：
-> ```bash
-> export DEEPSEEK_API_KEY="sk-your-api-key"  # Linux/macOS
-> set DEEPSEEK_API_KEY=sk-your-api-key       # Windows CMD
-> $env:DEEPSEEK_API_KEY="sk-your-api-key"    # Windows PowerShell
-> ```
+> 本地测试 AI 功能需设置环境变量：`$env:DEEPSEEK_API_KEY="sk-your-key"` (PowerShell)
 
 ---
 
 ## 部署
 
-### 部署云函数
+详见 `.trae/rules/deployment-guide.md` 或 `.trae/skills/deploy/SKILL.md`。简要流程：
 
-```bash
-cd <项目目录>
-MSYS_NO_PATHCONV=1 npx mcporter call cloudbase.manageFunctions \
-  action="createFunction" \
-  func='{"name":"lab4-http","type":"HTTP","runtime":"Nodejs18.15","timeout":60}' \
-  functionRootPath="d:/FuDan/生成式软件开发/Lab4/cloudfunctions" \
-  --output json
-```
+```powershell
+# 1. 构建前端
+cd frontend ; npm run build
 
-若函数已存在，使用 `updateFunctionCode` 更新代码：
+# 2. 更新云函数
+mcporter call cloudbase.manageFunctions action=updateFunctionCode functionName=lab4-http functionRootPath="d:/FuDan/生成式软件开发/Lab4/cloudfunctions" --output json
 
-```bash
-npx mcporter call cloudbase.manageFunctions \
-  action="updateFunctionCode" \
-  functionName="lab4-http" \
-  functionRootPath="d:/FuDan/生成式软件开发/Lab4/cloudfunctions" \
-  --output json
-```
-
-### 部署前端
-
-```bash
-cd frontend
-npm run build
-
-# 通过 MCP 上传到静态托管
-cd ..
-MSYS_NO_PATHCONV=1 npx mcporter call cloudbase.manageHosting \
-  action="upload" \
-  localPath="d:/FuDan/生成式软件开发/Lab4/frontend/dist" \
-  cloudPath="/" \
-  --output json
+# 3. 部署前端
+npx tcb hosting deploy frontend/dist -e lab3-3-d5gdcm7qo10ced8af
 ```
 
 ---
 
-## 安全配置
+## 数据库
 
-### 函数安全规则
+| 集合 | 说明 |
+|------|------|
+| `study_plans` | 学习计划 |
+| `study_tasks` | 学习任务 |
+| `study_subtasks` | 子任务（实施步骤） |
+| `plan_chat_messages` | AI 对话记录 |
 
-已配置为 `CUSTOM` 模式，规则为 `true`（允许所有调用方）。可通过以下方式查看和修改：
-
-```bash
-# 查看当前安全规则
-npx mcporter call cloudbase.queryPermissions \
-  action="getResourcePermission" \
-  resourceType="function" \
-  resourceId="lab4-http" \
-  --output json
-
-# 更新安全规则
-npx mcporter call cloudbase.managePermissions \
-  action="updateResourcePermission" \
-  resourceType="function" \
-  resourceId="lab4-http" \
-  permission="CUSTOM" \
-  securityRule='"true"' \
-  --output json
-```
-
-### 前端认证
-
-前端使用 CloudBase 匿名认证（`auth.signInAnonymously()`），无需用户注册即可使用。所有数据库操作通过 CloudBase 安全规则控制权限。
+前端不直连数据库，全部通过 HTTP 云函数访问。
 
 ---
 
-## 功能说明
+## AI 配置
 
-### 学习计划创建
+| 配置项 | 位置 |
+|--------|------|
+| DEEPSEEK_API_KEY | CloudBase 控制台 → 云函数 → lab4-http → 环境变量 |
+| 模型 | `deepseek-chat` |
 
-- 输入学习主题、日期范围、每日可用时间等
-- AI 自动生成逐日学习任务（DeepSeek 模型）
-- AI 不可用时自动降级为模板化任务生成
-
-### 日历视图
-
-- 月历展示每日任务概览
-- 点击日期查看当天详细任务
-- 任务完成状态实时切换
-
-### AI 功能
-
-| 功能 | 说明 | 依赖 |
-|------|------|------|
-| 自动生成任务 | 根据学习主题和参数 AI 生成逐日任务 | DeepSeek API |
-| 计划优化 | AI 对话式优化已有学习计划 | DeepSeek API |
-| 字段补全 | 自动补全描述、预期成果等字段 | 无需 API（本地规则） |
-
-### 降级策略
-
-当 DeepSeek API Key 未配置或 API 调用失败时：
-- **任务生成**: 使用 5 种模板循环填充，确保计划始终可创建
-- **计划优化**: 返回友好提示信息
-- **字段补全**: 使用内置规则自动补全
+API Key 未配置时，AI 功能自动降级为模板化任务生成。
 
 ---
 
 ## 技术栈
 
-- **前端**: Vue 3 + TypeScript + Vite + Vue Router
-- **后端**: CloudBase HTTP 云函数 (Node.js 18)
+- **前端**: Vue 3 + TypeScript + Vite 6 + Vue Router
+- **后端**: CloudBase HTTP 云函数 (Node.js 18.15)
 - **数据库**: CloudBase NoSQL 文档数据库
 - **认证**: CloudBase 匿名认证
 - **AI**: DeepSeek Chat API
+- **测试**: Node.js 原生 `node:test` + `node:assert`
 - **部署**: CloudBase 静态托管 + 云函数
-
-## CloudBase 控制台入口
-
-- [环境概览](https://tcb.cloud.tencent.com/dev?envId=lab3-3-d5gdcm7qo10ced8af#/overview)
-- [云函数管理](https://tcb.cloud.tencent.com/dev?envId=lab3-3-d5gdcm7qo10ced8af#/scf)
-- [数据库管理](https://tcb.cloud.tencent.com/dev?envId=lab3-3-d5gdcm7qo10ced8af#/db/doc)
-- [静态托管](https://tcb.cloud.tencent.com/dev?envId=lab3-3-d5gdcm7qo10ced8af#/static-hosting)
